@@ -12,6 +12,12 @@ pub fn run() {
             use tauri::tray::TrayIconBuilder;
             use tauri::Manager;
 
+            // Always show and focus the main window on launch
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+
             let show_i = MenuItem::with_id(app, "show", "Show Netherite", true, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "Quit Netherite", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &quit_i])?;
