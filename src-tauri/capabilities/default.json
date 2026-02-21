@@ -1,0 +1,38 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "fs:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-hide",
+    {
+      "identifier": "fs:allow-applocaldata-read-recursive"
+    },
+    {
+      "identifier": "fs:allow-applocaldata-write-recursive"
+    },
+    {
+      "identifier": "fs:allow-mkdir"
+    },
+    {
+      "identifier": "fs:allow-exists"
+    },
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        {
+          "path": "$APPLOCALDATA/netherite"
+        },
+        {
+          "path": "$APPLOCALDATA/netherite/*"
+        }
+      ]
+    }
+  ]
+}
