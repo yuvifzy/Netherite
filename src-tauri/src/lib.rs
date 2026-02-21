@@ -1,3 +1,5 @@
+use tauri::Manager;
+
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -8,25 +10,36 @@ fn greet(name: &str) -> String {
 async fn toggle_drop_window(app: tauri::AppHandle) -> Result<(), String> {
     // If already open, close it (toggle off)
     if let Some(existing) = app.get_webview_window("drop") {
-        existing.close().map_err(|e| e.to_string())?;
+        existing.close().map_err(|e: tauri::Error| e.to_string())?;
         return Ok(());
     }
+    open_drop_window_internal(&app).await
+}
 
+#[tauri::command]
+async fn ensure_drop_window_open(app: tauri::AppHandle) -> Result<(), String> {
+    if app.get_webview_window("drop").is_none() {
+        open_drop_window_internal(&app).await?;
+    }
+    Ok(())
+}
+
+async fn open_drop_window_internal(app: &tauri::AppHandle) -> Result<(), String> {
     // Get main window geometry to position to its right
     let main = app
         .get_webview_window("main")
         .ok_or("main window not found")?;
 
-    let scale = main.scale_factor().map_err(|e| e.to_string())?;
-    let pos = main.outer_position().map_err(|e| e.to_string())?;
-    let size = main.outer_size().map_err(|e| e.to_string())?;
+    let scale = main.scale_factor().map_err(|e: tauri::Error| e.to_string())?;
+    let pos = main.outer_position().map_err(|e: tauri::Error| e.to_string())?;
+    let size = main.outer_size().map_err(|e: tauri::Error| e.to_string())?;
 
     // Convert physical → logical coordinates (CSS pixels)
     let x = (pos.x as f64 + size.width as f64) / scale + 8.0;
     let y = pos.y as f64 / scale;
 
     tauri::WebviewWindowBuilder::new(
-        &app,
+        app,
         "drop",
         tauri::WebviewUrl::App("index.html?window=filedrop".into()),
     )
@@ -100,7 +113,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, toggle_drop_window])
+        .invoke_handler(tauri::generate_handler![greet, toggle_drop_window, ensure_drop_window_open])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|_app, event| {
