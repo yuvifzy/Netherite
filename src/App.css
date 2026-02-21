@@ -36,10 +36,47 @@ body,
   background: transparent;
   cursor: grab;
   border: none;
+  display: flex;
+  align-items: center;
 }
 
 .drag-handle:active {
   cursor: grabbing;
+}
+
+.drag-handle-buttons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 6px;
+  height: 100%;
+  -webkit-app-region: no-drag;
+}
+
+.handle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.4);
+  transition: color 0.15s ease, background 0.15s ease;
+  flex-shrink: 0;
+  outline: none;
+}
+
+.handle-btn:hover {
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.handle-btn:active {
+  background: rgba(255, 255, 255, 0.13);
 }
 
 .editor {
