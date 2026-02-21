@@ -24,8 +24,17 @@ async fn ensure_drop_window_open(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-async fn open_drop_window_internal(app: &tauri::AppHandle) -> Result<(), String> {
-    // Get main window geometry to position to its right
+#[tauri::command]
+async fn sync_drop_window_position(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(drop) = app.get_webview_window("drop") {
+        let (x, y) = get_drop_window_pos(&app)?;
+        drop.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }))
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn get_drop_window_pos(app: &tauri::AppHandle) -> Result<(f64, f64), String> {
     let main = app
         .get_webview_window("main")
         .ok_or("main window not found")?;
@@ -34,9 +43,13 @@ async fn open_drop_window_internal(app: &tauri::AppHandle) -> Result<(), String>
     let pos = main.outer_position().map_err(|e: tauri::Error| e.to_string())?;
     let size = main.outer_size().map_err(|e: tauri::Error| e.to_string())?;
 
-    // Convert physical → logical coordinates (CSS pixels)
     let x = (pos.x as f64 + size.width as f64) / scale + 8.0;
     let y = pos.y as f64 / scale;
+    Ok((x, y))
+}
+
+async fn open_drop_window_internal(app: &tauri::AppHandle) -> Result<(), String> {
+    let (x, y) = get_drop_window_pos(app)?;
 
     tauri::WebviewWindowBuilder::new(
         app,
@@ -113,7 +126,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, toggle_drop_window, ensure_drop_window_open])
+        .invoke_handler(tauri::generate_handler![greet, toggle_drop_window, ensure_drop_window_open, sync_drop_window_position])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|_app, event| {

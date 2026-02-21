@@ -46,12 +46,25 @@ export default function FileDrop() {
     const handleDrop = async (e: React.DragEvent) => {
         e.preventDefault();
         setIsDraggingOver(false);
-        for (const file of Array.from(e.dataTransfer.files)) {
-            const buf = await file.arrayBuffer();
-            await writeFile(`${DROPS}/${file.name}`, new Uint8Array(buf), {
-                baseDir: BaseDirectory.AppLocalData,
-            });
-            setFiles((prev) => (prev.includes(file.name) ? prev : [...prev, file.name]));
+
+        const droppedFiles = Array.from(e.dataTransfer.files);
+        if (droppedFiles.length === 0) return;
+
+        // Ensure directory exists immediately before writing
+        const ok = await exists(DROPS, { baseDir: BaseDirectory.AppLocalData });
+        if (!ok) await mkdir(DROPS, { baseDir: BaseDirectory.AppLocalData, recursive: true });
+
+        for (const file of droppedFiles) {
+            try {
+                const buf = await file.arrayBuffer();
+                await writeFile(`${DROPS}/${file.name}`, new Uint8Array(buf), {
+                    baseDir: BaseDirectory.AppLocalData,
+                });
+                console.log(`Saved: ${file.name}`);
+                setFiles((prev) => (prev.includes(file.name) ? prev : [...prev, file.name]));
+            } catch (err) {
+                console.error(`Failed to save ${file.name}:`, err);
+            }
         }
     };
 

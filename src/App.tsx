@@ -49,16 +49,24 @@ function App() {
     return () => { unlisten.then((f) => f()); };
   }, []);
 
-  // Auto-open drop window on drag over main window
+  // Window events: Auto-open drop window on drag + sync position on move
   useEffect(() => {
-    const handleDragEnter = (e: DragEvent) => {
-      // Check if it's a file drag
-      if (e.dataTransfer?.types.includes("Files")) {
+    // 1. Native drag detection (triggers even before dragenter hits webview)
+    const unlistenDrag = getCurrentWindow().onDragDropEvent((event) => {
+      if (event.payload.type === "enter") {
         invoke("ensure_drop_window_open");
       }
+    });
+
+    // 2. Sync satellite position when main moves
+    const unlistenMove = getCurrentWindow().onMoved(() => {
+      invoke("sync_drop_window_position");
+    });
+
+    return () => {
+      unlistenDrag.then((f) => f());
+      unlistenMove.then((f) => f());
     };
-    window.addEventListener("dragenter", handleDragEnter);
-    return () => window.removeEventListener("dragenter", handleDragEnter);
   }, []);
 
   // Cmd+W → hide window
