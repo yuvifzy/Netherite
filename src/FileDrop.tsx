@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { writeFile, readDir, exists, mkdir, BaseDirectory } from "@tauri-apps/plugin-fs";
 import "./FileDrop.css";
@@ -33,23 +32,7 @@ export default function FileDrop() {
         return () => window.removeEventListener("keydown", onKey);
     }, []);
 
-    // Cross-window: if main gains focus, cancel any pending close timer
-    useEffect(() => {
-        let timer: ReturnType<typeof setTimeout>;
-        const unlistenBlur = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-            if (!focused) {
-                timer = setTimeout(() => getCurrentWindow().close(), 250);
-            } else {
-                clearTimeout(timer);
-            }
-        });
-        const unlistenMain = listen("main-focused", () => clearTimeout(timer));
-        return () => {
-            unlistenBlur.then((f) => f());
-            unlistenMain.then((f) => f());
-            clearTimeout(timer);
-        };
-    }, []);
+
 
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
@@ -74,6 +57,7 @@ export default function FileDrop() {
 
     return (
         <div className="fd-window">
+            <button className="fd-close" onClick={() => getCurrentWindow().close()}>&times;</button>
             {/* ── AirDrop column ── */}
             <div className="fd-left">
                 <button className="airdrop-btn" onClick={() => openUrl("airdrop://")}>

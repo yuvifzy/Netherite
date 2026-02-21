@@ -49,6 +49,18 @@ function App() {
     return () => { unlisten.then((f) => f()); };
   }, []);
 
+  // Auto-open drop window on drag over main window
+  useEffect(() => {
+    const handleDragEnter = (e: DragEvent) => {
+      // Check if it's a file drag
+      if (e.dataTransfer?.types.includes("Files")) {
+        invoke("ensure_drop_window_open");
+      }
+    };
+    window.addEventListener("dragenter", handleDragEnter);
+    return () => window.removeEventListener("dragenter", handleDragEnter);
+  }, []);
+
   // Cmd+W → hide window
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
