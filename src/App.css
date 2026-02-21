@@ -53,6 +53,63 @@ body,
   -webkit-app-region: no-drag;
 }
 
+.drag-handle-spacer {
+  flex: 1;
+  height: 100%;
+  -webkit-app-region: drag;
+}
+
+.drag-handle-right {
+  padding-left: 0;
+  padding-right: 6px;
+}
+
+.opacity-btn-wrap {
+  position: relative;
+}
+
+.opacity-popup {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 44px;
+  padding: 10px 0 8px;
+  background: rgba(28, 28, 32, 0.92);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 100;
+  -webkit-app-region: no-drag;
+}
+
+.opacity-label {
+  font-family: monospace;
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+.opacity-slider {
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 4px;
+  height: 80px;
+  cursor: pointer;
+  accent-color: rgba(255, 255, 255, 0.75);
+  background: transparent;
+  outline: none;
+  border: none;
+}
+
 .handle-btn {
   display: flex;
   align-items: center;
