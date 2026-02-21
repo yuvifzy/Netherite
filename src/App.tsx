@@ -1,11 +1,16 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { readTextFile, writeTextFile, exists, mkdir, BaseDirectory } from "@tauri-apps/plugin-fs";
+import { appLocalDataDir } from "@tauri-apps/api/path";
+import {
+  readTextFile, writeTextFile, writeFile, readDir, remove,
+  exists, mkdir, BaseDirectory
+} from "@tauri-apps/plugin-fs";
 import "./App.css";
 
 const MIN_FONT = 11;
 const MAX_FONT = 24;
 const DEFAULT_FONT = 15;
+const DROPS_PATH = "netherite/drops";
 
 function wordCount(text: string): number {
   const trimmed = text.trim();
@@ -32,8 +37,8 @@ function App() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const opacityBtnRef = useRef<HTMLButtonElement>(null);
   const opacityPopupRef = useRef<HTMLDivElement>(null);
-  const fileBtnRef = useRef<HTMLButtonElement>(null);
-  const filePopupRef = useRef<HTMLDivElement>(null);
+  const dropBtnRef = useRef<HTMLButtonElement>(null);
+  const dropPopupRef = useRef<HTMLDivElement>(null);
   const saveIndicatorTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Auto-focus on window focus
@@ -56,12 +61,14 @@ function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Load file on mount
+  // Load memo + existing drops on mount
   useEffect(() => {
     async function load() {
+      // Ensure base netherite dir
       const dirExists = await exists("netherite", { baseDir: BaseDirectory.AppLocalData });
       if (!dirExists) await mkdir("netherite", { baseDir: BaseDirectory.AppLocalData });
 
+      // Load memo
       const fileExists = await exists("netherite/memo.txt", { baseDir: BaseDirectory.AppLocalData });
       if (fileExists) {
         const contents = await readTextFile("netherite/memo.txt", { baseDir: BaseDirectory.AppLocalData });
@@ -69,6 +76,19 @@ function App() {
       } else {
         await writeTextFile("netherite/memo.txt", "", { baseDir: BaseDirectory.AppLocalData });
       }
+
+      // Ensure drops dir and load existing files
+      const dropsExists = await exists(DROPS_PATH, { baseDir: BaseDirectory.AppLocalData });
+      if (!dropsExists) await mkdir(DROPS_PATH, { baseDir: BaseDirectory.AppLocalData });
+      else {
+        const entries = await readDir(DROPS_PATH, { baseDir: BaseDirectory.AppLocalData });
+        const names = entries
+          .filter((e) => e.isFile)
+          .map((e) => e.name)
+          .filter((n): n is string => !!n);
+        setDroppedFiles(names);
+      }
+
       initialized.current = true;
     }
     load();
@@ -98,15 +118,11 @@ function App() {
       if (
         opacityBtnRef.current && !opacityBtnRef.current.contains(target) &&
         opacityPopupRef.current && !opacityPopupRef.current.contains(target)
-      ) {
-        setShowOpacityPopup(false);
-      }
+      ) setShowOpacityPopup(false);
       if (
-        fileBtnRef.current && !fileBtnRef.current.contains(target) &&
-        filePopupRef.current && !filePopupRef.current.contains(target)
-      ) {
-        setShowFilePopup(false);
-      }
+        dropBtnRef.current && !dropBtnRef.current.contains(target) &&
+        dropPopupRef.current && !dropPopupRef.current.contains(target)
+      ) setShowFilePopup(false);
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
@@ -128,22 +144,44 @@ function App() {
     });
   };
 
+  // ── File drop handlers ──
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDraggingOver(true);
   };
 
-  const handleDragLeave = () => setIsDraggingOver(false);
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDraggingOver(false);
-    const files = Array.from(e.dataTransfer.files).map((f) => f.name);
-    setDroppedFiles((prev) => [...prev, ...files]);
+  const handleDragLeave = (e: React.DragEvent) => {
+    // Only clear if leaving the drop zone itself, not a child
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDraggingOver(false);
+    }
   };
 
-  const removeFile = (index: number) => {
-    setDroppedFiles((prev) => prev.filter((_, i) => i !== index));
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    for (const file of files) {
+      const buf = await file.arrayBuffer();
+      await writeFile(`${DROPS_PATH}/${file.name}`, new Uint8Array(buf), {
+        baseDir: BaseDirectory.AppLocalData,
+      });
+      setDroppedFiles((prev) => (prev.includes(file.name) ? prev : [...prev, file.name]));
+    }
+  };
+
+  const removeDroppedFile = async (name: string) => {
+    await remove(`${DROPS_PATH}/${name}`, { baseDir: BaseDirectory.AppLocalData });
+    setDroppedFiles((prev) => prev.filter((n) => n !== name));
+  };
+
+  // Drag files back out — set the file path as text/uri-list
+  const handleFileDragStart = async (e: React.DragEvent, name: string) => {
+    const base = await appLocalDataDir();
+    const filePath = `${base}netherite/drops/${name}`;
+    e.dataTransfer.setData("text/uri-list", `file://${filePath}`);
+    e.dataTransfer.setData("text/plain", filePath);
+    e.dataTransfer.effectAllowed = "copy";
   };
 
   const words = wordCount(text);
@@ -156,7 +194,6 @@ function App() {
         className="handle"
         data-tauri-drag-region
         onMouseDown={async (e) => {
-          // Only drag if clicking on the handle bar itself, not buttons
           if ((e.target as HTMLElement).closest(".handle-right")) return;
           await getCurrentWindow().startDragging();
         }}
@@ -168,33 +205,21 @@ function App() {
 
         <div className="handle-right" onMouseDown={(e) => e.stopPropagation()}>
           {/* To-do */}
-          <button
-            className={`btn${activeBtns.has("todo") ? " active" : ""}`}
-            data-tip="To-do list"
-            onClick={() => toggleBtn("todo")}
-          >
+          <button className={`btn${activeBtns.has("todo") ? " active" : ""}`} data-tip="To-do list" onClick={() => toggleBtn("todo")}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path d="M9 12l2 2 4-4M5 13V7a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2v-1" />
             </svg>
           </button>
 
           {/* Home */}
-          <button
-            className={`btn${activeBtns.has("home") ? " active" : ""}`}
-            data-tip="Home"
-            onClick={() => toggleBtn("home")}
-          >
+          <button className={`btn${activeBtns.has("home") ? " active" : ""}`} data-tip="Home" onClick={() => toggleBtn("home")}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
             </svg>
           </button>
 
           {/* New Note */}
-          <button
-            className={`btn${activeBtns.has("new") ? " active" : ""}`}
-            data-tip="New note (⌘N)"
-            onClick={() => toggleBtn("new")}
-          >
+          <button className={`btn${activeBtns.has("new") ? " active" : ""}`} data-tip="New note (⌘N)" onClick={() => toggleBtn("new")}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path d="M12 5v14M5 12h14" />
             </svg>
@@ -203,12 +228,7 @@ function App() {
           <div className="btn-divider" />
 
           {/* Opacity */}
-          <button
-            ref={opacityBtnRef}
-            className={`btn${showOpacityPopup ? " active" : ""}`}
-            data-tip="Opacity"
-            onClick={() => setShowOpacityPopup((v) => !v)}
-          >
+          <button ref={opacityBtnRef} className={`btn${showOpacityPopup ? " active" : ""}`} data-tip="Opacity" onClick={() => setShowOpacityPopup((v) => !v)}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <circle cx="12" cy="12" r="9" />
               <path d="M12 3v18M3 12h18" strokeOpacity="0.4" />
@@ -222,14 +242,7 @@ function App() {
       {showOpacityPopup && (
         <div ref={opacityPopupRef} className="opacity-popup visible">
           <span className="popup-label">Window opacity</span>
-          <input
-            type="range"
-            className="opacity-slider"
-            min={30}
-            max={100}
-            value={opacity}
-            onChange={(e) => handleOpacityChange(Number(e.target.value))}
-          />
+          <input type="range" className="opacity-slider" min={30} max={100} value={opacity} onChange={(e) => handleOpacityChange(Number(e.target.value))} />
         </div>
       )}
 
@@ -242,40 +255,10 @@ function App() {
           spellCheck={false}
           value={text}
           style={{ fontSize: `${fontSize}px` }}
-          onChange={(e) => {
-            isUserEdit.current = true;
-            setText(e.target.value);
-          }}
+          onChange={(e) => { isUserEdit.current = true; setText(e.target.value); }}
           autoFocus
         />
       </div>
-
-      {/* ── FILE DROP POPUP ── */}
-      {showFilePopup && (
-        <div ref={filePopupRef} className="file-popup visible">
-          <div
-            className={`drop-zone${isDraggingOver ? " dragging-over" : ""}`}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6H16a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v9" />
-            </svg>
-            <span className="drop-zone-text">Drop files here<br />to store temporarily</span>
-          </div>
-          {droppedFiles.length > 0 && (
-            <div className="dropped-files">
-              {droppedFiles.map((name, i) => (
-                <div key={i} className="dropped-file">
-                  <span>{name}</span>
-                  <button className="remove-file" onClick={() => removeFile(i)}>×</button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── BOTTOM BAR ── */}
       <div className="bottom-bar">
@@ -284,25 +267,69 @@ function App() {
             <button className="size-btn" onClick={() => changeSize(-1)}>A−</button>
             <button className="size-btn" onClick={() => changeSize(1)}>A+</button>
           </div>
-          <span className="word-count">
-            {words} {words === 1 ? "word" : "words"}
-          </span>
+          <span className="word-count">{words} {words === 1 ? "word" : "words"}</span>
         </div>
-
         <div className="bottom-right">
           <span className={`saved-indicator${showSaved ? " show" : ""}`}>saved</span>
-          <button
-            ref={fileBtnRef}
-            className="file-btn"
-            data-tip="File drop"
-            onClick={() => setShowFilePopup((v) => !v)}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M20 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" />
-              <path d="M16 3H8L6 7h12l-2-4z" />
-            </svg>
-          </button>
         </div>
+      </div>
+
+      {/* ── FILE DROP BUTTON (absolute, bottom-right) ── */}
+      <div className="drop-btn-wrap">
+        <button
+          ref={dropBtnRef}
+          className="drop-btn"
+          title="File drop"
+          onClick={() => setShowFilePopup((v) => !v)}
+        >
+          {/* Inbox / tray icon */}
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="21 15 21 19 3 19 3 15" />
+            <path d="M16 8l-4 4-4-4" />
+            <line x1="12" y1="12" x2="12" y2="2" />
+          </svg>
+        </button>
+
+        {showFilePopup && (
+          <div
+            ref={dropPopupRef}
+            className="drop-popup"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {/* Drop zone */}
+            <div
+              className={`drop-zone${isDraggingOver ? " dragging-over" : ""}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6H16a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v9" />
+              </svg>
+              <span className="drop-zone-text">Drop files here</span>
+            </div>
+
+            {/* File list */}
+            {droppedFiles.length > 0 && (
+              <div className="drop-file-list">
+                {droppedFiles.map((name) => (
+                  <div
+                    key={name}
+                    className="drop-file-item"
+                    draggable
+                    onDragStart={(e) => handleFileDragStart(e, name)}
+                  >
+                    <span className="drop-file-name">{name}</span>
+                    <button
+                      className="drop-file-remove"
+                      onClick={() => removeDroppedFile(name)}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
     </div>
