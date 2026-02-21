@@ -13,7 +13,7 @@
   --bg-blur: rgba(22, 22, 26, 0.88);
   --surface: rgba(255, 255, 255, 0.04);
   --surface-hover: rgba(255, 255, 255, 0.07);
-  --border: rgba(255, 255, 255, 0.07);
+  --border: rgba(255, 255, 255, 0.12);
   --text: rgba(240, 238, 233, 0.92);
   --text-dim: rgba(240, 238, 233, 0.28);
   --text-muted: rgba(240, 238, 233, 0.14);
@@ -112,8 +112,8 @@ body,
   height: 6px;
   border-radius: 50%;
   background: var(--accent);
-  opacity: 0.6;
-  box-shadow: 0 0 6px var(--accent);
+  opacity: 0.85;
+  box-shadow: 0 0 8px 1px var(--accent);
 }
 
 .app-name {
@@ -138,7 +138,7 @@ body,
   border-radius: 7px;
   border: none;
   background: transparent;
-  color: var(--text-dim);
+  color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -220,7 +220,7 @@ textarea {
 }
 
 textarea::placeholder {
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.25);
   font-style: italic;
 }
 
@@ -257,7 +257,7 @@ textarea::-webkit-scrollbar-thumb {
 
 .word-count {
   font-size: 9px;
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.3);
   letter-spacing: 0.05em;
   font-weight: 300;
   transition: color 0.2s;
@@ -273,7 +273,7 @@ textarea::-webkit-scrollbar-thumb {
 .size-btn {
   background: none;
   border: none;
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.3);
   cursor: pointer;
   font-family: 'Geist Mono', monospace;
   font-size: 9px;
