@@ -22,7 +22,13 @@ interface DroppedFile {
   ext: string;
 }
 
-async function generateThumbnail(fileBuf: Uint8Array, type: string): Promise<string | null> {
+declare global {
+  interface Window {
+    pdfjsLib: any;
+  }
+}
+
+async function generateImageThumbnail(fileBuf: Uint8Array, type: string): Promise<string | null> {
   return new Promise((resolve) => {
     const blob = new Blob([fileBuf as any], { type });
     const url = URL.createObjectURL(blob);
@@ -50,6 +56,105 @@ async function generateThumbnail(fileBuf: Uint8Array, type: string): Promise<str
       URL.revokeObjectURL(url);
     };
     img.src = url;
+  });
+}
+
+async function generatePdfThumbnail(fileBuf: Uint8Array): Promise<string | null> {
+  if (!window.pdfjsLib) return null;
+  try {
+    const pdf = await window.pdfjsLib.getDocument({ data: fileBuf }).promise;
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 1.0 });
+
+    const scale = Math.max(48 / viewport.width, 48 / viewport.height);
+    const scaledViewport = page.getViewport({ scale });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 48;
+    canvas.height = 48;
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) return null;
+
+    const renderCanvas = document.createElement("canvas");
+    renderCanvas.width = scaledViewport.width;
+    renderCanvas.height = scaledViewport.height;
+    const renderCtx = renderCanvas.getContext("2d");
+
+    if (renderCtx) {
+      renderCtx.fillStyle = "#ffffff";
+      renderCtx.fillRect(0, 0, renderCanvas.width, renderCanvas.height);
+    }
+
+    await page.render({ canvasContext: renderCtx, viewport: scaledViewport }).promise;
+
+    const x = (48 - scaledViewport.width) / 2;
+    const y = (48 - scaledViewport.height) / 2;
+
+    ctx.drawImage(renderCanvas, x, y);
+    return canvas.toDataURL("image/webp", 0.8);
+  } catch (err) {
+    console.error("PDF thumbnail generation failed", err);
+    return null;
+  }
+}
+
+async function generateVideoThumbnail(fileBuf: Uint8Array, type: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const blob = new Blob([fileBuf as any], { type });
+    const url = URL.createObjectURL(blob);
+    const video = document.createElement("video");
+    let isCleanedUp = false;
+
+    const cleanup = () => {
+      if (isCleanedUp) return;
+      isCleanedUp = true;
+      video.removeAttribute("src");
+      video.load();
+      URL.revokeObjectURL(url);
+    };
+
+    video.onloadeddata = () => {
+      try {
+        if (video.duration < 1) {
+          video.currentTime = video.duration / 2;
+        } else {
+          video.currentTime = 1;
+        }
+      } catch {
+        cleanup();
+        resolve(null);
+      }
+    };
+
+    video.onseeked = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 48;
+      canvas.height = 48;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        const scale = Math.max(48 / video.videoWidth, 48 / video.videoHeight);
+        const w = video.videoWidth * scale;
+        const h = video.videoHeight * scale;
+        const x = (48 - w) / 2;
+        const y = (48 - h) / 2;
+        ctx.drawImage(video, x, y, w, h);
+        resolve(canvas.toDataURL("image/webp", 0.8));
+      } else {
+        resolve(null);
+      }
+      cleanup();
+    };
+
+    video.onerror = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    video.muted = true;
+    video.playsInline = true;
+    video.src = url;
+    video.load();
   });
 }
 
@@ -171,10 +276,20 @@ function App() {
           }
 
           try {
-            const isImage = /^(JPG|JPEG|PNG|GIF|WEBP)$/i.test(ext);
-            if (isImage) {
+            const isImage = /^(JPG|JPEG|PNG|GIF|WEBP|SVG)$/i.test(ext);
+            const isPdf = /^(PDF)$/i.test(ext);
+            const isVideo = /^(MP4|MOV|WEBM)$/i.test(ext);
+
+            if (isImage || isPdf || isVideo) {
               const fileData = await readFile(`netherite/drops/${name}`, { baseDir: BaseDirectory.AppLocalData });
-              previewUrl = await generateThumbnail(fileData, `image/${ext.toLowerCase()}`);
+
+              if (isImage) {
+                previewUrl = await generateImageThumbnail(fileData, `image/${ext.toLowerCase() === "svg" ? "svg+xml" : ext.toLowerCase()}`);
+              } else if (isPdf) {
+                previewUrl = await generatePdfThumbnail(fileData);
+              } else if (isVideo) {
+                previewUrl = await generateVideoThumbnail(fileData, `video/${ext.toLowerCase()}`);
+              }
             }
           } catch (err) {
             console.error("Thumbnail gen failed", err);
