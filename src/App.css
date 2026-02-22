@@ -323,15 +323,10 @@ textarea::-webkit-scrollbar-thumb {
   opacity: 1;
 }
 
-/* ── DROP BUTTON (absolute bottom-right) ── */
-.drop-btn-wrap {
+.file-btn {
   position: absolute;
   bottom: 10px;
   right: 10px;
-  z-index: 60;
-}
-
-.drop-btn {
   width: 22px;
   height: 22px;
   border-radius: 6px;
@@ -342,13 +337,19 @@ textarea::-webkit-scrollbar-thumb {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.15s;
-  outline: none;
-  padding: 0;
+  transition: background 0.15s, color 0.15s;
+  z-index: 60;
 }
 
-.drop-btn:hover {
+.file-btn:hover {
+  background: var(--surface-hover);
   color: rgba(255, 255, 255, 0.7);
+}
+
+.file-btn svg {
+  width: 11px;
+  height: 11px;
+  stroke-width: 1.6;
 }
 
 /* ── OPACITY POPUP ── */
@@ -414,29 +415,33 @@ textarea::-webkit-scrollbar-thumb {
   box-shadow: 0 0 6px var(--accent);
 }
 
-/* ── DROP POPUP ── */
-.drop-popup {
+/* ── FILE DROP POPUP ── */
+.file-popup {
   position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
+  bottom: 40px;
+  right: 10px;
   width: 200px;
   height: 160px;
   background: rgba(30, 30, 32, 0.96);
-  border-radius: 12px;
   border: 0.5px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  display: flex;
+  display: none;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px;
+  gap: 8px;
+  z-index: 50;
   animation: popIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
-  overflow: hidden;
+}
+
+.file-popup.visible {
+  display: flex;
 }
 
 .drop-zone {
-  flex: 1;
   border: 1px dashed rgba(255, 255, 255, 0.15);
   border-radius: 8px;
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -452,77 +457,57 @@ textarea::-webkit-scrollbar-thumb {
 }
 
 .drop-zone svg {
-  color: rgba(255, 255, 255, 0.2);
-  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  stroke-width: 1.4;
 }
 
 .drop-zone-text {
   font-size: 10px;
   color: rgba(255, 255, 255, 0.25);
   text-align: center;
-  letter-spacing: 0.04em;
   font-family: 'Geist Mono', monospace;
 }
 
-.drop-file-list {
+.dropped-files {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  max-height: 64px;
+  gap: 4px;
+  max-height: 80px;
   overflow-y: auto;
-  flex-shrink: 0;
 }
 
-.drop-file-list::-webkit-scrollbar {
-  width: 2px;
-}
-
-.drop-file-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-}
-
-.drop-file-item {
+.dropped-file {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 3px 6px;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 5px;
-  cursor: grab;
-  transition: background 0.15s;
-}
-
-.drop-file-item:hover {
-  background: rgba(255, 255, 255, 0.07);
-}
-
-.drop-file-item:active {
-  cursor: grabbing;
-}
-
-.drop-file-name {
+  padding: 4px 6px;
+  background: var(--surface);
+  border-radius: 6px;
   font-size: 9px;
-  color: rgba(240, 238, 233, 0.5);
+  color: var(--text-dim);
   font-family: 'Geist Mono', monospace;
-  white-space: nowrap;
+}
+
+.dropped-file span {
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 148px;
+  white-space: nowrap;
+  max-width: 120px;
 }
 
-.drop-file-remove {
+.remove-file {
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--text-muted);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 10px;
   padding: 0 2px;
   line-height: 1;
-  flex-shrink: 0;
   transition: color 0.15s;
 }
 
-.drop-file-remove:hover {
+.remove-file:hover {
   color: #ff6b6b;
 }
