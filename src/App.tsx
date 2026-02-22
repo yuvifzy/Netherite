@@ -360,10 +360,25 @@ function App() {
     setIsDropOpen(next);
   };
 
-  const toggleBtn = async (id: string) => {
+  const toggleBtn = async (id: string, e?: React.MouseEvent) => {
     if (id === "todo") {
       try {
-        await invoke("open_todo_window");
+        let bx = 0;
+        let by = 0;
+        if (e) {
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          const clientX = rect.left + rect.width / 2;
+          const clientY = rect.top + rect.height / 2;
+
+          const factor = await getCurrentWindow().scaleFactor();
+          const winPos = await getCurrentWindow().outerPosition();
+
+          const logicalX = winPos.x / factor;
+          const logicalY = winPos.y / factor;
+          bx = logicalX + clientX;
+          by = logicalY + clientY;
+        }
+        await invoke("open_todo_window", { button_x: bx, button_y: by });
       } catch (err) {
         console.error("Failed to spawn or focus todo window:", err);
       }
@@ -433,7 +448,7 @@ function App() {
             <button
               className={`btn${activeBtns.has("todo") ? " active" : ""}`}
               data-tip="To-do list"
-              onClick={() => toggleBtn("todo")}
+              onClick={(e) => toggleBtn("todo", e)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path d="M9 12l2 2 4-4M5 13V7a2 2 0 012-2h10a2 2 0 012 2v10a2 2 0 01-2 2H7a2 2 0 01-2-2v-1" />

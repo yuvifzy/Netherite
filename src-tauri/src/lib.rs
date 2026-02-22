@@ -16,13 +16,34 @@ fn open_airdrop() -> Result<(), String> {
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, Emitter};
 
 #[tauri::command]
-async fn open_todo_window(app: tauri::AppHandle) -> Result<(), String> {
+async fn open_todo_window(app: tauri::AppHandle, button_x: f64, button_y: f64) -> Result<(), String> {
+    // Default logical position fallback if fetching window bounds somehow fails
+    let mut offset_x = 0.0;
+    let mut offset_y = 0.0;
+    let mut origin_x = 350.0;
+    let mut origin_y = 20.0;
+
+    if let Some(main_window) = app.get_webview_window("main") {
+        if let Ok(outer_pos) = main_window.outer_position() {
+            if let Ok(factor) = main_window.scale_factor() {
+                let logical_pos = outer_pos.to_logical::<f64>(factor);
+                offset_x = logical_pos.x - 328.0;
+                offset_y = logical_pos.y;
+                if button_x > 0.0 && button_y > 0.0 {
+                    origin_x = button_x - offset_x;
+                    origin_y = button_y - offset_y;
+                }
+            }
+        }
+    }
+
     // If the window is already open, toggle its visibility
     if let Some(todo_window) = app.get_webview_window("todo") {
         if todo_window.is_visible().unwrap_or(false) {
             let _ = todo_window.hide();
             let _ = app.emit("todo-state", false);
         } else {
+            let _ = app.emit("todo-refresh-origin", (origin_x, origin_y));
             let _ = todo_window.show();
             let _ = todo_window.set_focus();
             let _ = app.emit("todo-state", true);
@@ -44,7 +65,9 @@ async fn open_todo_window(app: tauri::AppHandle) -> Result<(), String> {
         }
     }
 
-    WebviewWindowBuilder::new(&app, "todo", WebviewUrl::App("/?window=todo".into()))
+    let url = format!("/?window=todo&ox={}&oy={}", origin_x, origin_y);
+
+    WebviewWindowBuilder::new(&app, "todo", WebviewUrl::App(url.into()))
         .title("todo")
         .inner_size(320.0, 420.0)
         .position(offset_x, offset_y)

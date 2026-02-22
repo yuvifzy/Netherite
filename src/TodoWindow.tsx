@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { emit } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { readTextFile, writeTextFile, exists, BaseDirectory } from "@tauri-apps/plugin-fs";
 import "./TodoWindow.css";
 
@@ -18,14 +18,31 @@ export default function TodoWindow() {
     const [isClosing, setIsClosing] = useState(false);
     const initialized = useRef(false);
 
+    const searchParams = new URLSearchParams(window.location.search);
+    const [ox, setOx] = useState(searchParams.get("ox") || "350");
+    const [oy, setOy] = useState(searchParams.get("oy") || "20");
+    const [animKey, setAnimKey] = useState(0);
+
     const closeWindow = () => {
         setIsClosing(true);
         setTimeout(() => {
             getCurrentWindow().hide();
             emit("todo-state", false);
             setIsClosing(false);
-        }, 280);
+        }, 260);
     };
+
+    useEffect(() => {
+        const unlisten = listen<[number, number]>("todo-refresh-origin", (event) => {
+            if (event.payload) {
+                setOx(event.payload[0].toString());
+                setOy(event.payload[1].toString());
+            }
+            setIsClosing(false);
+            setAnimKey(prev => prev + 1);
+        });
+        return () => { unlisten.then(f => f()); }
+    }, []);
 
     useEffect(() => {
         async function init() {
@@ -99,7 +116,7 @@ export default function TodoWindow() {
     const doneTodos = todos.filter((t) => t.done).sort((a, b) => b.createdAt - a.createdAt);
 
     return (
-        <div className={`todo-window ${isClosing ? "closing" : ""}`}>
+        <div key={animKey} className={`todo-window ${isClosing ? "closing" : ""}`} style={{ transformOrigin: `${ox}px ${oy}px` }}>
             <div className="todo-handle" data-tauri-drag-region>
                 <div className="todo-handle-left">
                     <div className="todo-dot" />
