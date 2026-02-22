@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { readTextFile, writeTextFile, exists, mkdir, BaseDirectory, remove, readDir, copyFile, readFile } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-shell";
@@ -356,12 +357,49 @@ function App() {
     setIsDropOpen(next);
   };
 
-  const toggleBtn = (id: string) => {
+  const toggleBtn = async (id: string) => {
     setActiveBtns((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+
+    if (id === "todo") {
+      try {
+        const todoWindow = await WebviewWindow.getByLabel("todo");
+        if (todoWindow) {
+          await todoWindow.setFocus();
+          return;
+        }
+
+        const appWindow = getCurrentWindow();
+        const outerPosition = await appWindow.outerPosition();
+        const factor = await appWindow.scaleFactor();
+        const logicalPos = outerPosition.toLogical(factor);
+
+        const newTodoWindow = new WebviewWindow("todo", {
+          url: "/?window=todo",
+          width: 320,
+          height: 420,
+          x: logicalPos.x - 328,
+          y: logicalPos.y,
+          alwaysOnTop: true,
+          decorations: false,
+          transparent: true,
+          skipTaskbar: true,
+        });
+
+        await newTodoWindow.once("tauri://created", () => {
+          console.log("Todo window created successfully");
+        });
+
+        await newTodoWindow.once("tauri://error", (e) => {
+          console.error("Failed to create todo window:", e);
+        });
+      } catch (err) {
+        console.error("Failed to process todo window check", err);
+      }
+    }
   };
 
   const preventDefault = (e: React.DragEvent) => e.preventDefault();

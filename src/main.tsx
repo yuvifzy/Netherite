@@ -1,13 +1,13 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import FileDrop from "./FileDrop";
+import TodoWindow from "./TodoWindow";
 
 const params = new URLSearchParams(window.location.search);
-const isDropWindow = params.get("window") === "filedrop";
+const isTodoWindow = params.get("window") === "todo";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    {isDropWindow ? <FileDrop /> : <App />}
-  </React.StrictMode>,
+    {isTodoWindow ? <TodoWindow /> : <App />}
+  </React.StrictMode>
 );
