@@ -133,6 +133,7 @@ async fn open_home_window(app: tauri::AppHandle) -> Result<(), String> {
         .position(pos_x, pos_y)
         .decorations(false)
         .transparent(true)
+        .shadow(false)
         .always_on_top(true)
         .resizable(false)
         .skip_taskbar(true)
