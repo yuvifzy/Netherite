@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { getCurrentWindow, LogicalPosition } from "@tauri-apps/api/window";
-import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
 import { readTextFile, writeTextFile, exists, mkdir, BaseDirectory, remove, readDir, copyFile, readFile } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-shell";
@@ -365,39 +365,11 @@ function App() {
     });
 
     if (id === "todo") {
+      console.log("clicked todo button mapped natively");
       try {
-        const todoWindow = await WebviewWindow.getByLabel("todo");
-        if (todoWindow) {
-          await todoWindow.setFocus();
-          return;
-        }
-
-        const appWindow = getCurrentWindow();
-        const outerPosition = await appWindow.outerPosition();
-        const factor = await appWindow.scaleFactor();
-        const logicalPos = outerPosition.toLogical(factor);
-
-        const newTodoWindow = new WebviewWindow("todo", {
-          url: "/?window=todo",
-          width: 320,
-          height: 420,
-          x: logicalPos.x - 328,
-          y: logicalPos.y,
-          alwaysOnTop: true,
-          decorations: false,
-          transparent: true,
-          skipTaskbar: true,
-        });
-
-        await newTodoWindow.once("tauri://created", () => {
-          console.log("Todo window created successfully");
-        });
-
-        await newTodoWindow.once("tauri://error", (e) => {
-          console.error("Failed to create todo window:", e);
-        });
+        await invoke("open_todo_window");
       } catch (err) {
-        console.error("Failed to process todo window check", err);
+        console.error("Failed to spawn or focus todo window:", err);
       }
     }
   };

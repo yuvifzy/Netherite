@@ -13,6 +13,44 @@ fn open_airdrop() -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn open_todo_window(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+
+    // If the window is already open, focus it
+    if let Some(todo_window) = app.get_webview_window("todo") {
+        let _ = todo_window.set_focus();
+        return Ok(());
+    }
+
+    // Default logical position fallback if fetching window bounds somehow fails
+    let mut offset_x = 0.0;
+    let mut offset_y = 0.0;
+
+    if let Some(main_window) = app.get_webview_window("main") {
+        if let Ok(outer_pos) = main_window.outer_position() {
+            if let Ok(factor) = main_window.scale_factor() {
+                let logical_pos = outer_pos.to_logical::<f64>(factor);
+                offset_x = logical_pos.x - 328.0;
+                offset_y = logical_pos.y;
+            }
+        }
+    }
+
+    WebviewWindowBuilder::new(&app, "todo", WebviewUrl::App("/?window=todo".into()))
+        .title("todo")
+        .inner_size(320.0, 420.0)
+        .position(offset_x, offset_y)
+        .always_on_top(true)
+        .decorations(false)
+        .transparent(true)
+        .skip_taskbar(true)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -73,7 +111,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, open_airdrop])
+        .invoke_handler(tauri::generate_handler![greet, open_airdrop, open_todo_window])
 
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
