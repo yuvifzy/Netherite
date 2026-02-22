@@ -10,8 +10,18 @@ function wordCount(t: string): number {
     return t.trim() ? t.trim().split(/\s+/).length : 0;
 }
 
+function deriveTitle(text: string): string {
+    const trimmed = text.trim();
+    if (!trimmed) return "New note";
+    // Use the first line, trimmed to first 5 words
+    const firstLine = trimmed.split("\n")[0].trim();
+    const words = firstLine.split(/\s+/).slice(0, 5).join(" ");
+    return words.length > 28 ? words.slice(0, 28) + "…" : words;
+}
+
 export default function NoteWindow() {
     const [text, setText] = useState("");
+    const [isClosing, setIsClosing] = useState(false);
     const [showSaved, setShowSaved] = useState(false);
     const [fontSize, setFontSize] = useState(14);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -41,12 +51,17 @@ export default function NoteWindow() {
         return () => { unlisten.then(f => f()); };
     }, []);
 
-    // Cmd+W → close
+    // Cmd+W → close with animation
+    const closeWindow = () => {
+        setIsClosing(true);
+        setTimeout(() => getCurrentWindow().hide(), 280);
+    };
+
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
             if (e.metaKey && e.key.toLowerCase() === "w") {
                 e.preventDefault();
-                getCurrentWindow().hide();
+                closeWindow();
             }
         };
         window.addEventListener("keydown", onKey);
@@ -71,7 +86,7 @@ export default function NoteWindow() {
 
     return (
         <div className="nw-root">
-            <div className="nw-window">
+            <div className={`nw-window${isClosing ? " closing" : ""}`}>
                 {/* drag handle */}
                 <div
                     className="nw-handle"
@@ -82,15 +97,13 @@ export default function NoteWindow() {
                 >
                     <div className="nw-handle-left">
                         <div className="nw-dot" />
-                        <span className="nw-label">
-                            {FILE.replace(".txt", "").replace("note_", "note ")}
-                        </span>
+                        <span className="nw-label">{deriveTitle(text)}</span>
                     </div>
                     <div className="nw-handle-right" onMouseDown={e => e.stopPropagation()}>
                         <button
                             className="nw-close-btn"
-                            onClick={() => getCurrentWindow().hide()}
-                            title="Close"
+                            onClick={closeWindow}
+                            title="Close (⌘W)"
                         >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                                 <path d="M18 6 6 18M6 6l12 12" />
