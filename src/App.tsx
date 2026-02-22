@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -361,6 +361,7 @@ function App() {
   };
 
   const toggleBtn = async (id: string, e?: React.MouseEvent) => {
+    console.log("TODO BUTTON CLICKED!", id);
     if (id === "todo") {
       try {
         let bx = 0;
@@ -370,15 +371,23 @@ function App() {
           const clientX = rect.left + rect.width / 2;
           const clientY = rect.top + rect.height / 2;
 
-          const factor = await getCurrentWindow().scaleFactor();
-          const winPos = await getCurrentWindow().outerPosition();
+          let factor = 1.0;
+          try { factor = await getCurrentWindow().scaleFactor(); } catch (e) { }
 
-          const logicalX = winPos.x / factor;
-          const logicalY = winPos.y / factor;
+          let logicalX = 0;
+          let logicalY = 0;
+          try {
+            const winPos = await getCurrentWindow().outerPosition();
+            logicalX = winPos.x / factor;
+            logicalY = winPos.y / factor;
+          } catch (e) { }
+
           bx = logicalX + clientX;
           by = logicalY + clientY;
+          console.log("Calculated origins", bx, by);
         }
-        await invoke("open_todo_window", { button_x: bx, button_y: by });
+        await invoke("open_todo_window", { buttonX: bx, buttonY: by });
+        console.log("Invoke successful");
       } catch (err) {
         console.error("Failed to spawn or focus todo window:", err);
       }
@@ -448,6 +457,7 @@ function App() {
             <button
               className={`btn${activeBtns.has("todo") ? " active" : ""}`}
               data-tip="To-do list"
+              style={{ pointerEvents: "all" }}
               onClick={(e) => toggleBtn("todo", e)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
