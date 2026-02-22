@@ -34,6 +34,7 @@
           "path": "$APPLOCALDATA/netherite/*"
         }
       ]
-    }
+    },
+    "shell:allow-open"
   ]
 }

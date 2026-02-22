@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { invoke } from "@tauri-apps/api/core";
 import { readTextFile, writeTextFile, exists, mkdir, BaseDirectory, remove, readDir, copyFile, readFile } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir } from "@tauri-apps/api/path";
-import { LogicalSize } from "@tauri-apps/api/dpi";
+import { open } from "@tauri-apps/plugin-shell";
 import "./App.css";
 
 const MIN_FONT = 11;
@@ -255,9 +254,8 @@ function App() {
     const unlistenDrop = getCurrentWindow().onDragDropEvent(async (event) => {
       // Auto-open logic
       if (!isDropOpenRef.current && (event.payload.type === "enter" || event.payload.type === "over")) {
-        // Prevent toggle spam
         isDropOpenRef.current = true;
-        toggleDropWindow(true);
+        setIsDropOpen(true);
       }
 
       if (event.payload.type === "drop") {
@@ -318,14 +316,25 @@ function App() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isDropOpenRef.current) {
-        toggleDropWindow(false);
+        isDropOpenRef.current = false;
+        setIsDropOpen(false);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
 
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (isDropOpenRef.current && target && !target.closest(".drop-popover") && !target.closest(".file-btn")) {
+        isDropOpenRef.current = false;
+        setIsDropOpen(false);
+      }
+    };
+    window.addEventListener("click", handleClickOutside);
+
     return () => {
       unlistenDrop.then((f) => f());
       window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("click", handleClickOutside);
     };
   }, []); // Use ref for tracking to avoid unlisten loops
 
@@ -341,28 +350,10 @@ function App() {
     return () => clearTimeout(timeout);
   }, [text]);
 
-  const toggleDropWindow = async (forceOpenState?: boolean) => {
-    try {
-      const nextState = forceOpenState !== undefined ? forceOpenState : !isDropOpenRef.current;
-      if (nextState === isDropOpenRef.current && forceOpenState === undefined) return;
-      isDropOpenRef.current = nextState;
-      setIsDropOpen(nextState);
-
-      const appWindow = getCurrentWindow();
-      const factor = await appWindow.scaleFactor();
-      const size = await appWindow.outerSize();
-      const logicalSize = size.toLogical(factor);
-
-      if (nextState) {
-        await appWindow.setSize(new LogicalSize(780, Math.round(logicalSize.height)));
-      } else {
-        setTimeout(async () => {
-          await appWindow.setSize(new LogicalSize(360, Math.round(logicalSize.height)));
-        }, 200);
-      }
-    } catch (err) {
-      console.error("Window expansion logic failed", err);
-    }
+  const toggleDropPopover = () => {
+    const next = !isDropOpenRef.current;
+    isDropOpenRef.current = next;
+    setIsDropOpen(next);
   };
 
   const toggleBtn = (id: string) => {
@@ -391,7 +382,7 @@ function App() {
   const words = wordCount(text);
 
   return (
-    <div className={`app-container${isDropOpen ? " expanded" : ""}`} style={{ opacity: opacity / 100 }}>
+    <div className="app-container" style={{ opacity: opacity / 100 }}>
       {/* ── MEMO PANEL ── */}
       <div className="window memo-panel">
         <div
@@ -499,9 +490,9 @@ function App() {
           <div className="bottom-right">
             <span className={`saved-indicator${showSaved ? " show" : ""}`}>saved</span>
             <button
-              className="file-btn"
+              className={`file-btn${isDropOpen ? " active" : ""}`}
               data-tip="File drop"
-              onClick={() => toggleDropWindow()}
+              onClick={toggleDropPopover}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path d="M20 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" />
@@ -510,68 +501,75 @@ function App() {
             </button>
           </div>
         </div>
-      </div>
 
-      {/* ── DROP PANEL ── */}
-      {isDropOpen && (
-        <div className="window drop-panel-container fade-in">
-          <div className="drop-window-layout h-full">
-            <div className="airdrop-col" onClick={() => invoke("open_airdrop")}>
-              <div className="airdrop-btn">
+        {/* ── POPOVER DROP ZONE ── */}
+        {isDropOpen && (
+          <div className="drop-popover">
+            <div className="popover-layout">
+              <div
+                className="popover-airdrop-col"
+                onClick={async () => {
+                  try {
+                    await open("/System/Library/CoreServices/Finder.app");
+                  } catch (err) {
+                    console.error("Failed to open AirDrop", err);
+                  }
+                }}
+              >
+                <div className="popover-airdrop-content">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 10.5 3.75-3.75 3.75 3.75M12 6.75v10.5" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                  </svg>
+                  <span>AirDrop</span>
+                </div>
+              </div>
+
+              <div
+                className={`popover-drop-zone${isDraggingOver ? " dragging" : ""}${droppedFiles.length > 0 ? " has-items" : ""}`}
+                onDragOver={preventDefault}
+                onDragLeave={preventDefault}
+                onDrop={preventDefault}
+              >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 10.5 3.75-3.75 3.75 3.75M12 6.75v10.5" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
                 </svg>
-                <span>AirDrop</span>
+                <span className="popover-drop-text">Drop files here</span>
+
+                {droppedFiles.length > 0 && (
+                  <div className="popover-drop-scroll">
+                    {droppedFiles.map((file, i) => (
+                      <div
+                        key={i}
+                        className="popover-drop-card"
+                        draggable
+                        onDragStart={(e) => {
+                          if (localDirRef.current) {
+                            const absolutePath = `${localDirRef.current}/netherite/drops/${file.name}`.replace(/[\/\\]+/g, '/');
+                            e.dataTransfer.setData("DownloadURL", `application/octet-stream:${file.name}:file://${absolutePath}`);
+                          }
+                        }}
+                      >
+                        {file.previewUrl ? (
+                          <img src={file.previewUrl} alt={file.name} className="popover-card-thumb" draggable={false} />
+                        ) : (
+                          <div className="popover-card-badge">{file.ext.substring(0, 4)}</div>
+                        )}
+                        <span className="popover-card-name">{file.name}</span>
+                        <button className="popover-card-remove" onClick={() => removeFileHandler(file.name)}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M18 6L6 18M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-
-            <div className="drop-divider" />
-
-            <div
-              className={`drop-panel${isDraggingOver ? " dragging-over" : ""}${droppedFiles.length > 0 ? " has-files" : ""}`}
-              onDragOver={preventDefault}
-              onDragLeave={preventDefault}
-              onDrop={preventDefault}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-              </svg>
-              <span className="drop-panel-text">Drop files here</span>
-
-              {droppedFiles.length > 0 && (
-                <div className="drop-panel-files">
-                  {droppedFiles.map((file, i) => (
-                    <div
-                      key={i}
-                      className="drop-card"
-                      draggable
-                      onDragStart={(e) => {
-                        if (localDirRef.current) {
-                          const absolutePath = `${localDirRef.current}/netherite/drops/${file.name}`.replace(/[\/\\]+/g, '/');
-                          e.dataTransfer.setData("DownloadURL", `application/octet-stream:${file.name}:file://${absolutePath}`);
-                        }
-                      }}
-                    >
-                      {file.previewUrl ? (
-                        <img src={file.previewUrl} alt={file.name} className="drop-card-thumb" draggable={false} />
-                      ) : (
-                        <div className="drop-card-badge">{file.ext.substring(0, 4)}</div>
-                      )}
-                      <span className="drop-card-name">{file.name}</span>
-                      <button className="drop-card-remove" onClick={() => removeFileHandler(file.name)}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                          <path d="M18 6L6 18M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
