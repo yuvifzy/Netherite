@@ -61,6 +61,17 @@ async fn close_drop_window(app_handle: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+async fn toggle_drop_window(app_handle: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    if app_handle.get_webview_window("drop").is_some() {
+        let _ = close_drop_window(app_handle).await;
+    } else {
+        let _ = open_drop_window(app_handle).await;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -121,7 +132,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, open_airdrop, open_drop_window, close_drop_window])
+        .invoke_handler(tauri::generate_handler![greet, open_airdrop, open_drop_window, close_drop_window, toggle_drop_window])
 
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

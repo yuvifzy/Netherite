@@ -42,16 +42,8 @@ function DropWindow() {
     };
     window.addEventListener("keydown", handleKeyDown);
 
-    // Check if focused lost to close the window
-    const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (!focused) {
-        invoke("close_drop_window");
-      }
-    });
-
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      unlisten.then((f) => f());
     };
   }, []);
 
@@ -175,6 +167,17 @@ function MainWindow() {
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Auto-open drop window on drag
+  useEffect(() => {
+    const handleDragEnter = (e: DragEvent) => {
+      if (e.dataTransfer && e.dataTransfer.types.includes("Files")) {
+        invoke("open_drop_window");
+      }
+    };
+    window.addEventListener("dragenter", handleDragEnter);
+    return () => window.removeEventListener("dragenter", handleDragEnter);
   }, []);
 
   // Load file on mount
@@ -357,7 +360,7 @@ function MainWindow() {
           <button
             className="file-btn"
             data-tip="File drop"
-            onClick={() => invoke("open_drop_window")}
+            onClick={() => invoke("toggle_drop_window")}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path d="M20 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" />
