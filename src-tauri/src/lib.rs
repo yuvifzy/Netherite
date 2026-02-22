@@ -40,7 +40,6 @@ async fn open_todo_window(app: tauri::AppHandle, button_x: f64, button_y: f64) -
     // If the window is already open, toggle its visibility
     if let Some(todo_window) = app.get_webview_window("todo") {
         if todo_window.is_visible().unwrap_or(false) {
-            // Emit to the todo webview so it can run its close animation first
             let _ = app.emit("todo-close-animated", ());
         } else {
             let _ = app.emit("todo-refresh-origin", (origin_x, origin_y));
@@ -49,20 +48,6 @@ async fn open_todo_window(app: tauri::AppHandle, button_x: f64, button_y: f64) -
             let _ = app.emit("todo-state", true);
         }
         return Ok(());
-    }
-
-    // Default logical position fallback if fetching window bounds somehow fails
-    let mut offset_x = 0.0;
-    let mut offset_y = 0.0;
-
-    if let Some(main_window) = app.get_webview_window("main") {
-        if let Ok(outer_pos) = main_window.outer_position() {
-            if let Ok(factor) = main_window.scale_factor() {
-                let logical_pos = outer_pos.to_logical::<f64>(factor);
-                offset_x = logical_pos.x - 328.0;
-                offset_y = logical_pos.y;
-            }
-        }
     }
 
     let url = format!("/?window=todo&ox={}&oy={}", origin_x, origin_y);
@@ -79,7 +64,34 @@ async fn open_todo_window(app: tauri::AppHandle, button_x: f64, button_y: f64) -
         .map_err(|e| e.to_string())?;
 
     let _ = app.emit("todo-state", true);
+    Ok(())
+}
 
+#[tauri::command]
+async fn open_home_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("home") {
+        if win.is_visible().unwrap_or(false) {
+            let _ = app.emit("home-close-animated", ());
+        } else {
+            let _ = win.show();
+            let _ = win.set_focus();
+            let _ = app.emit("home-state", true);
+        }
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(&app, "home", WebviewUrl::App("/?window=home".into()))
+        .title("home")
+        .inner_size(680.0, 580.0)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .center()
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let _ = app.emit("home-state", true);
     Ok(())
 }
 
@@ -177,7 +189,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, open_airdrop, open_todo_window])
+        .invoke_handler(tauri::generate_handler![greet, open_airdrop, open_todo_window, open_home_window])
 
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

@@ -2,12 +2,13 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import TodoWindow from "./TodoWindow";
+import HomePanel from "./HomePanel";
 
 const params = new URLSearchParams(window.location.search);
-const isTodoWindow = params.get("window") === "todo";
+const windowType = params.get("window");
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    {isTodoWindow ? <TodoWindow /> : <App />}
+    {windowType === "todo" ? <TodoWindow /> : windowType === "home" ? <HomePanel /> : <App />}
   </React.StrictMode>
 );

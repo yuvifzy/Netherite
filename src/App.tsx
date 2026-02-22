@@ -415,12 +415,19 @@ function App() {
 
           bx = logicalX + clientX;
           by = logicalY + clientY;
-          console.log("Calculated origins", bx, by);
         }
         await invoke("open_todo_window", { buttonX: bx, buttonY: by });
-        console.log("Invoke successful");
       } catch (err) {
         console.error("Failed to spawn or focus todo window:", err);
+      }
+      return;
+    }
+
+    if (id === "home") {
+      try {
+        await invoke("open_home_window");
+      } catch (err) {
+        console.error("Failed to open home panel:", err);
       }
       return;
     }
@@ -433,20 +440,25 @@ function App() {
   };
 
   useEffect(() => {
-    let unlisten: () => void;
-    listen<boolean>("todo-state", (event) => {
+    const u1 = listen<boolean>("todo-state", (event) => {
       setActiveBtns((prev) => {
         const next = new Set(prev);
         if (event.payload) next.add("todo");
         else next.delete("todo");
         return next;
       });
-    }).then((f) => {
-      unlisten = f;
     });
-
+    const u2 = listen<boolean>("home-state", (event) => {
+      setActiveBtns((prev) => {
+        const next = new Set(prev);
+        if (event.payload) next.add("home");
+        else next.delete("home");
+        return next;
+      });
+    });
     return () => {
-      if (unlisten) unlisten();
+      u1.then(f => f());
+      u2.then(f => f());
     };
   }, []);
 
