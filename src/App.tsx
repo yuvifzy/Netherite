@@ -190,18 +190,6 @@ function App() {
     return () => { unlisten.then((f) => f()); };
   }, []);
 
-  // Cmd+W → hide window
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key.toLowerCase() === "w") {
-        e.preventDefault();
-        getCurrentWindow().hide();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
   // Drop files feature
   useEffect(() => {
     async function load() {
@@ -365,7 +353,6 @@ function App() {
     });
 
     if (id === "todo") {
-      console.log("clicked todo button mapped natively");
       try {
         await invoke("open_todo_window");
       } catch (err) {
@@ -373,6 +360,33 @@ function App() {
       }
     }
   };
+
+  useEffect(() => {
+    // Keep the "todo" button highlighted only if the window actually exists and is visible
+    let intv = setInterval(async () => {
+      try {
+        const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+        const todoWin = await WebviewWindow.getByLabel("todo");
+        if (todoWin) {
+          const visible = await todoWin.isVisible();
+          setActiveBtns((prev) => {
+            const next = new Set(prev);
+            if (visible) next.add("todo");
+            else next.delete("todo");
+            return next;
+          });
+        } else {
+          setActiveBtns((prev) => {
+            const next = new Set(prev);
+            next.delete("todo");
+            return next;
+          });
+        }
+      } catch (err) { }
+    }, 150);
+
+    return () => clearInterval(intv);
+  }, []);
 
   const preventDefault = (e: React.DragEvent) => e.preventDefault();
 
