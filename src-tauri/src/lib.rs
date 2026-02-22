@@ -1,17 +1,4 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
-#[tauri::command]
-fn open_airdrop() -> Result<(), String> {
-    std::process::Command::new("open")
-        .arg("finder://localhost")
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, Emitter};
 use std::time::UNIX_EPOCH;
@@ -127,7 +114,7 @@ async fn open_home_window(app: tauri::AppHandle) -> Result<(), String> {
         (100.0, 120.0)
     };
 
-    WebviewWindowBuilder::new(&app, "home", WebviewUrl::App("/?window=home".into()))
+    let home_win = WebviewWindowBuilder::new(&app, "home", WebviewUrl::App("/?window=home".into()))
         .title("home")
         .inner_size(680.0, 580.0)
         .position(pos_x, pos_y)
@@ -139,6 +126,14 @@ async fn open_home_window(app: tauri::AppHandle) -> Result<(), String> {
         .skip_taskbar(true)
         .build()
         .map_err(|e| e.to_string())?;
+
+    // Emit home-state:false if the OS closes the window (e.g. Activity Monitor)
+    let app2 = app.clone();
+    home_win.on_window_event(move |event| {
+        if let tauri::WindowEvent::Destroyed = event {
+            let _ = app2.emit("home-state", false);
+        }
+    });
 
     let _ = app.emit("home-state", true);
     Ok(())
@@ -212,7 +207,6 @@ async fn spawn_note_window(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 fn setup_main_window(window: tauri::WebviewWindow) {
-    let app_handle = window.app_handle().clone();
     let mw = window.clone();
     window.on_window_event(move |event| {
         match event {
@@ -319,7 +313,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, open_airdrop, get_note_files, open_todo_window, open_home_window, spawn_note_window])
+        .invoke_handler(tauri::generate_handler![get_note_files, open_todo_window, open_home_window, spawn_note_window])
 
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

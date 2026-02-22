@@ -392,7 +392,6 @@ function App() {
   };
 
   const toggleBtn = async (id: string, e?: React.MouseEvent) => {
-    console.log("TODO BUTTON CLICKED!", id);
     if (id === "todo") {
       try {
         let bx = 0;
@@ -543,7 +542,7 @@ function App() {
             </button>
 
             <button
-              className={`btn${activeBtns.has("new") ? " active" : ""}`}
+              className="btn"
               data-tip="New note (⌘N)"
               onClick={() => toggleBtn("new")}
             >
