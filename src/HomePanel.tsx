@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { emit, listen } from "@tauri-apps/api/event";
 import {
@@ -87,7 +87,31 @@ export default function HomePanel() {
     const drawerSearchRef = useRef<HTMLInputElement>(null);
     const [newTodoText, setNewTodoText] = useState("");
 
-    // ── Load data ──────────────────────────────────────────────────────────
+    // ── Load notes (extracted so focus can re-call it) ─────────────────────
+    const loadNotes = useCallback(async () => {
+        try {
+            const fileMetas = await invoke<NoteFileMeta[]>("get_note_files");
+            const loaded: NoteFile[] = [];
+            for (const meta of fileMetas.slice(0, 20)) {
+                try {
+                    const path = `netherite/${meta.name}`;
+                    const content = await readTextFile(path, { baseDir: BaseDirectory.AppLocalData });
+                    const firstLine = content.trim().split("\n").find(l => l.trim())
+                        || meta.name.replace(/^note_/, "note ").replace(".txt", "");
+                    loaded.push({
+                        name: meta.name,
+                        firstLine: firstLine.slice(0, 80),
+                        content,
+                        modified: relativeTime(meta.mtime_ms),
+                        ts: meta.mtime_ms,
+                    });
+                } catch { }
+            }
+            setNotes(loaded);
+        } catch { }
+    }, []);
+
+    // ── Load data on mount ─────────────────────────────────────────────────
     useEffect(() => {
         async function load() {
             // todos
@@ -98,31 +122,18 @@ export default function HomePanel() {
                 }
             } catch { }
 
-            // note files — use Rust command for real OS mtime
-            try {
-                const fileMetas = await invoke<NoteFileMeta[]>("get_note_files");
-                const loaded: NoteFile[] = [];
-                for (const meta of fileMetas.slice(0, 10)) {
-                    try {
-                        // strip "notes/" subdirectory from path if needed — files are directly in netherite/
-                        const path = `netherite/${meta.name}`;
-                        const content = await readTextFile(path, { baseDir: BaseDirectory.AppLocalData });
-                        const firstLine = content.split("\n").find(l => l.trim()) || meta.name.replace(".txt", "");
-                        loaded.push({
-                            name: meta.name,
-                            firstLine: firstLine.slice(0, 80),
-                            content,
-                            modified: relativeTime(meta.mtime_ms),
-                            ts: meta.mtime_ms,
-                        });
-                    } catch { }
-                }
-                setNotes(loaded);
-            } catch { }
+            await loadNotes();
         }
         load();
+    }, [loadNotes]);
 
-    }, []);
+    // ── Refresh notes when home panel gains focus ───────────────────────────
+    useEffect(() => {
+        const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+            if (focused) loadNotes();
+        });
+        return () => { unlisten.then(f => f()); };
+    }, [loadNotes]);
 
     // ── Clock ──────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -143,25 +154,24 @@ export default function HomePanel() {
         return () => { emit("home-state", false); };
     }, []);
 
-    // ── note-created — refresh notes list in real time ────────────────────
+    // ── note-created — add placeholder immediately, reload content soon ─────
     useEffect(() => {
-        const u = listen<string>("note-created", async (event) => {
+        const u = listen<string>("note-created", (event) => {
             const filename = event.payload;
-            try {
-                const content = await readTextFile(`netherite/${filename}`, { baseDir: BaseDirectory.AppLocalData });
-                const firstLine = content.split("\n").find(l => l.trim()) || filename.replace(".txt", "");
-                const newNote: NoteFile = {
-                    name: filename,
-                    firstLine: firstLine.slice(0, 80),
-                    content,
-                    modified: "just now",
-                    ts: Date.now(),
-                };
-                setNotes(prev => [newNote, ...prev].slice(0, 10));
-            } catch { }
+            // Add placeholder immediately so the card shows the new note right away
+            const placeholder: NoteFile = {
+                name: filename,
+                firstLine: "New note",
+                content: "",
+                modified: "just now",
+                ts: Date.now(),
+            };
+            setNotes(prev => [placeholder, ...prev].slice(0, 20));
+            // Re-read from disk after a short delay to pick up any content
+            setTimeout(() => loadNotes(), 2000);
         });
         return () => { u.then(f => f()); };
-    }, []);
+    }, [loadNotes]);
 
     // ── Close animation ────────────────────────────────────────────────────
     const closePanel = () => {

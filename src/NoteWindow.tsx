@@ -25,16 +25,26 @@ export default function NoteWindow() {
     const [showSaved, setShowSaved] = useState(false);
     const [fontSize, setFontSize] = useState(14);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const textRef = useRef("");                          // always in sync, no stale closure
     const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const saveIndicatorTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
     const initialized = useRef(false);
+
+    const saveNow = async (content: string) => {
+        try {
+            await writeTextFile(`netherite/${FILE}`, content, { baseDir: BaseDirectory.AppLocalData });
+            setShowSaved(true);
+            clearTimeout(saveIndicatorTimer.current);
+            saveIndicatorTimer.current = setTimeout(() => setShowSaved(false), 1200);
+        } catch { }
+    };
 
     // Load file
     useEffect(() => {
         if (initialized.current) return;
         initialized.current = true;
         readTextFile(`netherite/${FILE}`, { baseDir: BaseDirectory.AppLocalData })
-            .then(content => setText(content))
+            .then(content => { setText(content); textRef.current = content; })
             .catch(() => { });
     }, []);
 
@@ -43,10 +53,16 @@ export default function NoteWindow() {
         textareaRef.current?.focus();
     }, []);
 
-    // Re-focus on window focus
+    // Re-focus on window focus; flush save on blur
     useEffect(() => {
         const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-            if (focused) textareaRef.current?.focus();
+            if (focused) {
+                textareaRef.current?.focus();
+            } else {
+                // Window lost focus — flush any pending save immediately
+                clearTimeout(saveTimer.current);
+                saveNow(textRef.current);
+            }
         });
         return () => { unlisten.then(f => f()); };
     }, []);
@@ -68,18 +84,12 @@ export default function NoteWindow() {
         return () => window.removeEventListener("keydown", onKey);
     }, []);
 
-    // Debounced save
+    // Debounced save (600ms)
     const handleChange = (val: string) => {
         setText(val);
+        textRef.current = val;
         clearTimeout(saveTimer.current);
-        saveTimer.current = setTimeout(async () => {
-            try {
-                await writeTextFile(`netherite/${FILE}`, val, { baseDir: BaseDirectory.AppLocalData });
-                setShowSaved(true);
-                clearTimeout(saveIndicatorTimer.current);
-                saveIndicatorTimer.current = setTimeout(() => setShowSaved(false), 1200);
-            } catch { }
-        }, 800);
+        saveTimer.current = setTimeout(() => saveNow(val), 600);
     };
 
     const words = wordCount(text);
