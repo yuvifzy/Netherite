@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { emit, listen } from "@tauri-apps/api/event";
 import {
-    readTextFile, writeTextFile, exists, readDir, BaseDirectory,
+    readTextFile, writeTextFile, exists, BaseDirectory,
 } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
 import "./HomePanel.css";
@@ -21,6 +21,11 @@ interface NoteFile {
     modified: string;
     content: string;
     ts: number;
+}
+
+interface NoteFileMeta {
+    name: string;
+    mtime_ms: number;
 }
 
 interface ActivityItem {
@@ -85,49 +90,38 @@ export default function HomePanel() {
     // ── Load data ──────────────────────────────────────────────────────────
     useEffect(() => {
         async function load() {
+            // todos
             try {
-                // todos
-                const todosPath = "netherite/todos.json";
-                if (await exists(todosPath, { baseDir: BaseDirectory.AppLocalData })) {
-                    const raw = await readTextFile(todosPath, { baseDir: BaseDirectory.AppLocalData });
+                if (await exists("netherite/todos.json", { baseDir: BaseDirectory.AppLocalData })) {
+                    const raw = await readTextFile("netherite/todos.json", { baseDir: BaseDirectory.AppLocalData });
                     setTodos(JSON.parse(raw));
                 }
             } catch { }
 
+            // note files — use Rust command for real OS mtime
             try {
-                // note files
-                const notesDir = "netherite/notes";
-                if (!(await exists(notesDir, { baseDir: BaseDirectory.AppLocalData }))) return;
-                const entries = await readDir(notesDir, { baseDir: BaseDirectory.AppLocalData });
+                const fileMetas = await invoke<NoteFileMeta[]>("get_note_files");
                 const loaded: NoteFile[] = [];
-                for (const e of entries) {
-                    if (!e.isFile || !e.name.endsWith(".txt")) continue;
+                for (const meta of fileMetas.slice(0, 10)) {
                     try {
-                        const content = await readTextFile(`${notesDir}/${e.name}`, { baseDir: BaseDirectory.AppLocalData });
-                        const firstLine = content.split("\n").find(l => l.trim()) || e.name.replace(".txt", "");
+                        // strip "notes/" subdirectory from path if needed — files are directly in netherite/
+                        const path = `netherite/${meta.name}`;
+                        const content = await readTextFile(path, { baseDir: BaseDirectory.AppLocalData });
+                        const firstLine = content.split("\n").find(l => l.trim()) || meta.name.replace(".txt", "");
                         loaded.push({
-                            name: e.name,
+                            name: meta.name,
                             firstLine: firstLine.slice(0, 80),
                             content,
-                            modified: relativeTime(Date.now()), // approximate
-                            ts: Date.now(), // Tauri fs doesn't expose mtime easily; use load time
+                            modified: relativeTime(meta.mtime_ms),
+                            ts: meta.mtime_ms,
                         });
                     } catch { }
                 }
-                // Also treat the main memo
-                try {
-                    if (await exists("netherite/memo.txt", { baseDir: BaseDirectory.AppLocalData })) {
-                        const content = await readTextFile("netherite/memo.txt", { baseDir: BaseDirectory.AppLocalData });
-                        if (content.trim()) {
-                            const firstLine = content.split("\n").find(l => l.trim()) || "memo";
-                            loaded.unshift({ name: "memo.txt", firstLine: firstLine.slice(0, 80), content, modified: "just now", ts: Date.now() });
-                        }
-                    }
-                } catch { }
-                setNotes(loaded.slice(0, 10));
+                setNotes(loaded);
             } catch { }
         }
         load();
+
     }, []);
 
     // ── Clock ──────────────────────────────────────────────────────────────

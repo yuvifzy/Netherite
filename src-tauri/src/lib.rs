@@ -14,6 +14,42 @@ fn open_airdrop() -> Result<(), String> {
 }
 
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, Emitter};
+use std::time::UNIX_EPOCH;
+
+#[derive(serde::Serialize)]
+struct NoteFileMeta {
+    name: String,
+    mtime_ms: u64,
+}
+
+#[tauri::command]
+async fn get_note_files(app: tauri::AppHandle) -> Result<Vec<NoteFileMeta>, String> {
+    let base = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    let netherite = base.join("netherite");
+    if !netherite.exists() {
+        return Ok(vec![]);
+    }
+    let mut results = vec![];
+    let entries = std::fs::read_dir(&netherite).map_err(|e| e.to_string())?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                if name.ends_with(".txt") {
+                    let mtime_ms = path.metadata()
+                        .ok()
+                        .and_then(|m| m.modified().ok())
+                        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                        .map(|d| d.as_millis() as u64)
+                        .unwrap_or(0);
+                    results.push(NoteFileMeta { name: name.to_string(), mtime_ms });
+                }
+            }
+        }
+    }
+    results.sort_by(|a, b| b.mtime_ms.cmp(&a.mtime_ms));
+    Ok(results)
+}
 
 #[tauri::command]
 async fn open_todo_window(app: tauri::AppHandle, button_x: f64, button_y: f64) -> Result<(), String> {
@@ -80,14 +116,26 @@ async fn open_home_window(app: tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
+    // Compute Spotlight-style position: centered horizontally, 20% from top
+    let (pos_x, pos_y): (f64, f64) = if let Some(monitor) = app.primary_monitor().ok().flatten() {
+        let size = monitor.size();
+        let factor = monitor.scale_factor();
+        let w_logical = size.width as f64 / factor;
+        let h_logical = size.height as f64 / factor;
+        ((w_logical - 680.0) / 2.0, h_logical * 0.18)
+    } else {
+        (100.0, 120.0)
+    };
+
     WebviewWindowBuilder::new(&app, "home", WebviewUrl::App("/?window=home".into()))
         .title("home")
         .inner_size(680.0, 580.0)
+        .position(pos_x, pos_y)
         .decorations(false)
         .transparent(true)
         .always_on_top(true)
+        .resizable(false)
         .skip_taskbar(true)
-        .center()
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -189,7 +237,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, open_airdrop, open_todo_window, open_home_window])
+        .invoke_handler(tauri::generate_handler![greet, open_airdrop, get_note_files, open_todo_window, open_home_window])
 
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
