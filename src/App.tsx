@@ -176,6 +176,10 @@ function App() {
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const localDirRef = useRef<string>("");
 
+  const [isSleeping, setIsSleeping] = useState(false);
+  const sleepTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [loadedWords, setLoadedWords] = useState<string[] | null>(null);
+
   const initialized = useRef(false);
   const isUserEdit = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -189,6 +193,26 @@ function App() {
       if (focused) textareaRef.current?.focus();
     });
     return () => { unlisten.then((f) => f()); };
+  }, []);
+
+  // Sleep mode — 20s idle, wake on any interaction
+  const resetSleep = () => {
+    setIsSleeping(false);
+    clearTimeout(sleepTimer.current);
+    if (!isDropOpen) {
+      sleepTimer.current = setTimeout(() => setIsSleeping(true), 20_000);
+    }
+  };
+  useEffect(() => {
+    const onActivity = () => resetSleep();
+    document.addEventListener("keydown", onActivity);
+    document.addEventListener("click", onActivity);
+    sleepTimer.current = setTimeout(() => setIsSleeping(true), 20_000);
+    return () => {
+      clearTimeout(sleepTimer.current);
+      document.removeEventListener("keydown", onActivity);
+      document.removeEventListener("click", onActivity);
+    };
   }, []);
 
   // Cmd+W → hide window natively
@@ -248,6 +272,13 @@ function App() {
       if (fileExists) {
         const contents = await readTextFile("netherite/memo.txt", { baseDir: BaseDirectory.AppLocalData });
         setText(contents);
+        // Trigger word load-in animation
+        if (contents.trim()) {
+          const words = contents.split(/(\s+)/);
+          setLoadedWords(words);
+          // After animation completes, swap back to plain textarea
+          setTimeout(() => setLoadedWords(null), words.length * 18 + 300);
+        }
       } else {
         await writeTextFile("netherite/memo.txt", "", { baseDir: BaseDirectory.AppLocalData });
       }
@@ -452,7 +483,7 @@ function App() {
   return (
     <div className="app-container" style={{ opacity: opacity / 100 }}>
       {/* ── MEMO PANEL ── */}
-      <div className="window memo-panel">
+      <div className={`window memo-panel${isSleeping ? " sleeping" : ""}`}>
         <div
           className="handle"
           data-tauri-drag-region
@@ -532,19 +563,46 @@ function App() {
         )}
 
         <div className="editor-wrap">
-          <textarea
-            ref={textareaRef}
-            id="editor"
-            placeholder="What's on your mind..."
-            spellCheck={false}
-            value={text}
-            style={{ fontSize: `${fontSize}px` }}
-            onChange={(e) => {
-              isUserEdit.current = true;
-              setText(e.target.value);
-            }}
-            autoFocus
-          />
+          {loadedWords ? (
+            <div
+              style={{
+                padding: "14px 16px 10px",
+                fontFamily: "'Lora', serif",
+                fontSize: `${fontSize}px`,
+                lineHeight: 1.65,
+                color: "var(--text)",
+                letterSpacing: "0.01em",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                userSelect: "none",
+                position: "relative",
+                zIndex: 1,
+              }}
+            >
+              {loadedWords.map((word, i) =>
+                /^\s+$/.test(word) ? word :
+                  <span
+                    key={i}
+                    className="word-reveal-span"
+                    style={{ animationDelay: `${i * 18}ms` }}
+                  >{word}</span>
+              )}
+            </div>
+          ) : (
+            <textarea
+              ref={textareaRef}
+              id="editor"
+              placeholder="What's on your mind..."
+              spellCheck={false}
+              value={text}
+              style={{ fontSize: `${fontSize}px` }}
+              onChange={(e) => {
+                isUserEdit.current = true;
+                setText(e.target.value);
+              }}
+              autoFocus
+            />
+          )}
         </div>
 
         <div className="bottom-bar">

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400&family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=Instrument+Serif:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Lora:ital,wght@0,400;0,500;1,400&display=swap');
 
 *,
 *::before,
@@ -9,16 +9,17 @@
 }
 
 :root {
-  --bg: rgba(18, 18, 20, 0.92);
+  --bg: rgba(20, 18, 22, 0.93);
   --bg-blur: rgba(22, 22, 26, 0.88);
   --surface: rgba(255, 255, 255, 0.04);
   --surface-hover: rgba(255, 255, 255, 0.07);
-  --border: rgba(255, 255, 255, 0.12);
-  --text: rgba(240, 238, 233, 0.92);
-  --text-dim: rgba(240, 238, 233, 0.28);
-  --text-muted: rgba(240, 238, 233, 0.14);
-  --accent: #7b7bff;
-  --accent-soft: rgba(123, 123, 255, 0.15);
+  --border: rgba(255, 252, 248, 0.07);
+  --border-strong: rgba(255, 252, 248, 0.11);
+  --text: rgba(235, 232, 228, 0.90);
+  --text-dim: rgba(235, 232, 228, 0.28);
+  --text-muted: rgba(235, 232, 228, 0.14);
+  --accent: #a78bfa;
+  --accent-soft: rgba(167, 139, 250, 0.12);
   --radius: 14px;
   --handle-h: 36px;
   --bottom-h: 28px;
@@ -33,7 +34,7 @@ body,
   height: 100vh;
   background: transparent;
   overflow: hidden;
-  font-family: 'Geist Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
 }
 
 /* ── APP LAYOUT ── */
@@ -55,15 +56,20 @@ body,
   border: 0.5px solid var(--border);
   box-shadow:
     0 0 0 0.5px rgba(0, 0, 0, 0.6),
-    0 8px 16px rgba(0, 0, 0, 0.3),
-    0 24px 48px rgba(0, 0, 0, 0.4),
-    0 48px 80px rgba(0, 0, 0, 0.2),
+    0 12px 40px rgba(0, 0, 0, 0.45),
+    6px 16px 60px rgba(0, 0, 0, 0.25),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   height: 100%;
+  transition: opacity 1.5s ease;
   animation: floatIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Sleep mode — fired by JS after 20s idle */
+.window.sleeping {
+  opacity: 0.45;
 }
 
 .memo-panel {
@@ -117,15 +123,40 @@ body,
   }
 }
 
+/* Sleep — dot dims and stops pulsing */
+.sleeping .app-dot {
+  animation: none;
+  opacity: 0.3;
+}
+
+/* Word load-in animation */
+@keyframes wordReveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+    filter: blur(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.word-reveal-span {
+  display: inline;
+  animation: wordReveal 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 .window:focus-within {
-  border-color: rgba(123, 123, 255, 0.12);
+  border-color: rgba(167, 139, 250, 0.12);
   box-shadow:
     0 0 0 0.5px rgba(0, 0, 0, 0.6),
-    0 8px 16px rgba(0, 0, 0, 0.3),
-    0 24px 48px rgba(0, 0, 0, 0.4),
-    0 48px 80px rgba(0, 0, 0, 0.2),
+    0 12px 40px rgba(0, 0, 0, 0.45),
+    6px 16px 60px rgba(0, 0, 0, 0.25),
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 0 0 2px rgba(123, 123, 255, 0.06);
+    0 0 0 2px rgba(167, 139, 250, 0.06);
 }
 
 /* ── DRAG HANDLE ── */
@@ -237,7 +268,7 @@ body,
   border: 0.5px solid var(--border);
   letter-spacing: 0.04em;
   z-index: 100;
-  font-family: 'Geist Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
 }
 
 .btn:hover::after {
@@ -251,6 +282,18 @@ body,
   overflow: hidden;
 }
 
+/* Paper texture noise behind textarea */
+.editor-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.02;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}
+
 textarea {
   width: 100%;
   height: 100%;
@@ -259,12 +302,14 @@ textarea {
   outline: none;
   resize: none;
   color: var(--text);
-  font-family: 'Instrument Serif', serif;
+  font-family: 'Lora', serif;
   font-size: 15px;
   line-height: 1.65;
   padding: 14px 16px 10px;
   caret-color: var(--accent);
   letter-spacing: 0.01em;
+  position: relative;
+  z-index: 1;
 }
 
 textarea::placeholder {
@@ -309,7 +354,7 @@ textarea::-webkit-scrollbar-thumb {
   letter-spacing: 0.05em;
   font-weight: 300;
   transition: color 0.2s;
-  font-family: 'Geist Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
 }
 
 .size-controls {
@@ -323,7 +368,7 @@ textarea::-webkit-scrollbar-thumb {
   border: none;
   color: rgba(255, 255, 255, 0.3);
   cursor: pointer;
-  font-family: 'Geist Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 9px;
   padding: 2px 4px;
   border-radius: 4px;
@@ -344,12 +389,12 @@ textarea::-webkit-scrollbar-thumb {
 
 .saved-indicator {
   font-size: 9px;
-  color: rgba(123, 123, 255, 0.5);
+  color: rgba(167, 139, 250, 0.5);
   letter-spacing: 0.06em;
   opacity: 0;
   transition: opacity 0.2s;
   font-weight: 300;
-  font-family: 'Geist Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
 }
 
 .saved-indicator.show {
@@ -420,7 +465,7 @@ textarea::-webkit-scrollbar-thumb {
   color: var(--text-dim);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  font-family: 'Geist Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
 }
 
 .opacity-slider {
@@ -582,7 +627,7 @@ textarea::-webkit-scrollbar-thumb {
   border-radius: 6px;
   background: rgba(123, 123, 255, 0.15);
   color: var(--accent);
-  font-family: 'Geist Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 11px;
   font-weight: 600;
   display: flex;
@@ -592,7 +637,7 @@ textarea::-webkit-scrollbar-thumb {
 }
 
 .drop-card-name {
-  font-family: 'Geist Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 9px;
   color: rgba(255, 255, 255, 0.5);
   max-width: 80px;
