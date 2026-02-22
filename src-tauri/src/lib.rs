@@ -53,6 +53,43 @@ async fn open_drop_window(app_handle: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn ensure_drop_window_open(app_handle: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    if app_handle.get_webview_window("drop").is_some() {
+        return Ok(());
+    }
+
+    let main_window = app_handle.get_webview_window("main").ok_or("No main window")?;
+    let main_pos = main_window.outer_position().map_err(|e| e.to_string())?;
+    let main_size = main_window.outer_size().map_err(|e| e.to_string())?;
+    
+    let drop_window = tauri::WebviewWindowBuilder::new(
+        &app_handle,
+        "drop",
+        tauri::WebviewUrl::App("/?window=drop".into())
+    )
+    .inner_size(420.0, 140.0)
+    .decorations(false)
+    .always_on_top(true)
+    .transparent(true)
+    .skip_taskbar(true)
+    .resizable(false)
+    .build()
+    .map_err(|e| e.to_string())?;
+
+    let scale_factor = main_window.scale_factor().map_err(|e| e.to_string())?;
+    let logical_main_size = main_size.to_logical::<f64>(scale_factor);
+    let logical_main_pos = main_pos.to_logical::<f64>(scale_factor);
+    
+    let x = logical_main_pos.x + logical_main_size.width + 8.0;
+    let y = logical_main_pos.y;
+
+    let _ = drop_window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)));
+
+    Ok(())
+}
+
+#[tauri::command]
 async fn close_drop_window(app_handle: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
     if let Some(window) = app_handle.get_webview_window("drop") {
@@ -81,9 +118,27 @@ pub fn run() {
             use tauri::Manager;
 
             // Always show and focus the main window on launch
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
+            if let Some(main_window) = app.get_webview_window("main") {
+                let _ = main_window.show();
+                let _ = main_window.set_focus();
+
+                // Track window movement
+                let main_window_clone = main_window.clone();
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Moved(pos) = event {
+                        if let Some(drop_window) = main_window_clone.app_handle().get_webview_window("drop") {
+                            if let Ok(main_size) = main_window_clone.outer_size() {
+                                if let Ok(scale_factor) = main_window_clone.scale_factor() {
+                                    let logical_main_size = main_size.to_logical::<f64>(scale_factor);
+                                    let logical_main_pos = pos.to_logical::<f64>(scale_factor);
+                                    let x = logical_main_pos.x + logical_main_size.width + 8.0;
+                                    let y = logical_main_pos.y;
+                                    let _ = drop_window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)));
+                                }
+                            }
+                        }
+                    }
+                });
             }
 
             let show_i = MenuItem::with_id(app, "show", "Show Netherite", true, None::<&str>)?;
@@ -132,7 +187,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, open_airdrop, open_drop_window, close_drop_window, toggle_drop_window])
+        .invoke_handler(tauri::generate_handler![greet, open_airdrop, open_drop_window, ensure_drop_window_open, close_drop_window, toggle_drop_window])
 
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

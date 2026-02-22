@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
-import { readTextFile, writeTextFile, exists, mkdir, BaseDirectory, writeFile, remove, readDir } from "@tauri-apps/plugin-fs";
+import { readTextFile, writeTextFile, exists, mkdir, BaseDirectory, remove, readDir, copyFile } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir } from "@tauri-apps/api/path";
 import "./App.css";
 
@@ -26,11 +26,20 @@ function DropWindow() {
       const dropsExists = await exists("netherite/drops", { baseDir: BaseDirectory.AppLocalData });
       if (!dropsExists) {
         await mkdir("netherite/drops", { baseDir: BaseDirectory.AppLocalData, recursive: true });
-      } else {
-        const entries = await readDir("netherite/drops", { baseDir: BaseDirectory.AppLocalData });
-        const fileNames = entries.filter((e) => e.isFile).map((e) => e.name);
-        setDroppedFiles(fileNames);
       }
+
+      let fileNames: string[] = [];
+      const jsonExists = await exists("netherite/drops.json", { baseDir: BaseDirectory.AppLocalData });
+      if (jsonExists) {
+        try {
+          const content = await readTextFile("netherite/drops.json", { baseDir: BaseDirectory.AppLocalData });
+          fileNames = JSON.parse(content);
+        } catch { }
+      } else if (dropsExists) {
+        const entries = await readDir("netherite/drops", { baseDir: BaseDirectory.AppLocalData });
+        fileNames = entries.filter((e) => e.isFile).map((e) => e.name);
+      }
+      setDroppedFiles(fileNames);
       localDirRef.current = await appLocalDataDir();
     }
     load();
@@ -42,34 +51,43 @@ function DropWindow() {
     };
     window.addEventListener("keydown", handleKeyDown);
 
+    const unlistenDrop = getCurrentWindow().onDragDropEvent(async (event) => {
+      if (event.payload.type === "drop") {
+        setIsDraggingOver(false);
+        const newFiles: string[] = [];
+        for (const path of event.payload.paths) {
+          const nameMatch = path.match(/[^\/\\]+$/);
+          const name = nameMatch ? nameMatch[0] : "unknown";
+          try {
+            await copyFile(path, `netherite/drops/${name}`, { toPathBaseDir: BaseDirectory.AppLocalData });
+            newFiles.push(name);
+          } catch (err) {
+            console.error("Failed to copy file", err);
+          }
+        }
+        if (newFiles.length > 0) {
+          setDroppedFiles((prev) => {
+            const next = Array.from(new Set([...prev, ...newFiles]));
+            writeTextFile("netherite/drops.json", JSON.stringify(next), { baseDir: BaseDirectory.AppLocalData }).catch(console.error);
+            return next;
+          });
+        }
+      } else if (event.payload.type === "over") {
+        setIsDraggingOver(true);
+      } else if (event.payload.type === "leave" || event.payload.type === "enter") {
+        setIsDraggingOver(event.payload.type === "enter");
+      }
+    });
+
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
+      unlistenDrop.then((f) => f());
     };
   }, []);
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDraggingOver(true);
-  };
-
-  const handleDragLeave = () => setIsDraggingOver(false);
-
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDraggingOver(false);
-    const newFiles: string[] = [];
-    for (let i = 0; i < e.dataTransfer.files.length; i++) {
-      const file = e.dataTransfer.files[i];
-      try {
-        const buffer = await file.arrayBuffer();
-        await writeFile(`netherite/drops/${file.name}`, new Uint8Array(buffer), { baseDir: BaseDirectory.AppLocalData });
-        newFiles.push(file.name);
-      } catch (err) {
-        console.error("Failed to write dropped file", err);
-      }
-    }
-    setDroppedFiles((prev) => Array.from(new Set([...prev, ...newFiles])));
-  };
+  // Removed handleDrop/DragOver as we rely on native Tauri onDragDropEvent entirely
+  // Kept here as a dummy for HTML compatibility without bugs
+  const preventDefault = (e: React.DragEvent) => e.preventDefault();
 
   const removeFileHandler = async (name: string) => {
     try {
@@ -77,7 +95,11 @@ function DropWindow() {
     } catch (err) {
       console.error("Failed to delete file", err);
     }
-    setDroppedFiles((prev) => prev.filter((n) => n !== name));
+    setDroppedFiles((prev) => {
+      const next = prev.filter((n) => n !== name);
+      writeTextFile("netherite/drops.json", JSON.stringify(next), { baseDir: BaseDirectory.AppLocalData }).catch(console.error);
+      return next;
+    });
   };
 
   return (
@@ -97,9 +119,9 @@ function DropWindow() {
 
       <div
         className={`drop-panel${isDraggingOver ? " dragging-over" : ""}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
+        onDragOver={preventDefault}
+        onDragLeave={preventDefault}
+        onDrop={preventDefault}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6H16a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v9" />
@@ -169,15 +191,14 @@ function MainWindow() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Auto-open drop window on drag
+  // Auto-open drop window on drag natively natively via Tauri
   useEffect(() => {
-    const handleDragEnter = (e: DragEvent) => {
-      if (e.dataTransfer && e.dataTransfer.types.includes("Files")) {
-        invoke("open_drop_window");
+    const unlistenDrop = getCurrentWindow().onDragDropEvent((event) => {
+      if (event.payload.type === "enter" || event.payload.type === "over") {
+        invoke("ensure_drop_window_open");
       }
-    };
-    window.addEventListener("dragenter", handleDragEnter);
-    return () => window.removeEventListener("dragenter", handleDragEnter);
+    });
+    return () => { unlistenDrop.then(f => f()); };
   }, []);
 
   // Load file on mount
