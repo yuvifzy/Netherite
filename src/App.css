@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400&family=Instrument+Serif:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400&family=IBM+Plex+Mono:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=Instrument+Serif:ital@0;1&display=swap');
 
 *,
 *::before,
@@ -44,11 +44,17 @@ body,
   gap: 8px;
   overflow: hidden;
   align-items: stretch;
+  width: 360px;
+  transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-container.expanded {
+  width: 780px;
 }
 
 .window {
   position: relative;
-  border-radius: var(--radius);
+  border-radius: 14px 14px 14px 10px;
   background: var(--bg);
   -webkit-backdrop-filter: blur(40px) saturate(160%);
   backdrop-filter: blur(40px) saturate(160%);
@@ -74,6 +80,22 @@ body,
 .drop-panel-container {
   width: 412px;
   flex-shrink: 0;
+  border-radius: 14px 14px 14px 10px;
+}
+
+.fade-in {
+  opacity: 0;
+  animation: fadeIn 0.15s linear 150ms forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 .h-full {
@@ -445,7 +467,7 @@ textarea::-webkit-scrollbar-thumb {
 
 .airdrop-col {
   width: 140px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
   border-radius: 10px;
   display: flex;
   flex-direction: column;
@@ -454,10 +476,11 @@ textarea::-webkit-scrollbar-thumb {
   cursor: pointer;
   transition: background 0.15s;
   flex-shrink: 0;
+  margin: 12px;
 }
 
 .airdrop-col:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .airdrop-btn {
@@ -468,13 +491,13 @@ textarea::-webkit-scrollbar-thumb {
 }
 
 .airdrop-btn svg {
-  width: 24px;
-  height: 24px;
-  color: var(--text-dim);
+  width: 28px;
+  height: 28px;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .airdrop-btn span {
-  font-family: 'Geist Mono', monospace;
+  font-family: 'IBM Plex Mono', monospace;
   font-size: 11px;
   color: var(--text-dim);
 }
@@ -487,7 +510,7 @@ textarea::-webkit-scrollbar-thumb {
 
 .drop-panel {
   flex: 1;
-  border: 1.5px dashed rgba(255, 255, 255, 0.15);
+  border: 1.5px dashed rgba(255, 255, 255, 0.12);
   border-radius: 10px;
   display: flex;
   flex-direction: column;
@@ -496,24 +519,24 @@ textarea::-webkit-scrollbar-thumb {
   gap: 6px;
   transition: border-color 0.2s, background 0.2s;
   position: relative;
+  margin: 12px 12px 12px 0;
 }
 
 .drop-panel.dragging-over {
-  border-color: rgba(123, 123, 255, 0.5);
-  background: rgba(123, 123, 255, 0.08);
+  border-color: rgba(167, 139, 250, 0.5);
+  background: rgba(167, 139, 250, 0.06);
 }
 
 .drop-panel>svg {
   width: 20px;
   height: 20px;
-  color: rgba(255, 255, 255, 0.25);
-  stroke-width: 1.4;
+  color: rgba(255, 255, 255, 0.2);
 }
 
 .drop-panel-text {
-  font-family: 'Geist Mono', monospace;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.25);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.2);
   text-align: center;
 }
 
@@ -557,16 +580,16 @@ textarea::-webkit-scrollbar-thumb {
 }
 
 .drop-card-thumb {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   border-radius: 6px;
   object-fit: cover;
   flex-shrink: 0;
 }
 
 .drop-card-badge {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   border-radius: 6px;
   background: rgba(123, 123, 255, 0.15);
   color: var(--accent);

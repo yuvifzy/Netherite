@@ -35,15 +35,15 @@ async function generateImageThumbnail(fileBuf: Uint8Array, type: string): Promis
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement("canvas");
-      canvas.width = 48;
-      canvas.height = 48;
+      canvas.width = 56;
+      canvas.height = 56;
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        const scale = Math.max(48 / img.width, 48 / img.height);
+        const scale = Math.max(56 / img.width, 56 / img.height);
         const w = img.width * scale;
         const h = img.height * scale;
-        const x = (48 - w) / 2;
-        const y = (48 - h) / 2;
+        const x = (56 - w) / 2;
+        const y = (56 - h) / 2;
         ctx.drawImage(img, x, y, w, h);
         resolve(canvas.toDataURL("image/webp", 0.8));
       } else {
@@ -66,12 +66,12 @@ async function generatePdfThumbnail(fileBuf: Uint8Array): Promise<string | null>
     const page = await pdf.getPage(1);
     const viewport = page.getViewport({ scale: 1.0 });
 
-    const scale = Math.max(48 / viewport.width, 48 / viewport.height);
+    const scale = Math.max(56 / viewport.width, 56 / viewport.height);
     const scaledViewport = page.getViewport({ scale });
 
     const canvas = document.createElement("canvas");
-    canvas.width = 48;
-    canvas.height = 48;
+    canvas.width = 56;
+    canvas.height = 56;
     const ctx = canvas.getContext("2d");
 
     if (!ctx) return null;
@@ -88,8 +88,8 @@ async function generatePdfThumbnail(fileBuf: Uint8Array): Promise<string | null>
 
     await page.render({ canvasContext: renderCtx, viewport: scaledViewport }).promise;
 
-    const x = (48 - scaledViewport.width) / 2;
-    const y = (48 - scaledViewport.height) / 2;
+    const x = (56 - scaledViewport.width) / 2;
+    const y = (56 - scaledViewport.height) / 2;
 
     ctx.drawImage(renderCanvas, x, y);
     return canvas.toDataURL("image/webp", 0.8);
@@ -129,15 +129,15 @@ async function generateVideoThumbnail(fileBuf: Uint8Array, type: string): Promis
 
     video.onseeked = () => {
       const canvas = document.createElement("canvas");
-      canvas.width = 48;
-      canvas.height = 48;
+      canvas.width = 56;
+      canvas.height = 56;
       const ctx = canvas.getContext("2d");
       if (ctx) {
-        const scale = Math.max(48 / video.videoWidth, 48 / video.videoHeight);
+        const scale = Math.max(56 / video.videoWidth, 56 / video.videoHeight);
         const w = video.videoWidth * scale;
         const h = video.videoHeight * scale;
-        const x = (48 - w) / 2;
-        const y = (48 - h) / 2;
+        const x = (56 - w) / 2;
+        const y = (56 - h) / 2;
         ctx.drawImage(video, x, y, w, h);
         resolve(canvas.toDataURL("image/webp", 0.8));
       } else {
@@ -212,10 +212,10 @@ function App() {
       }
 
       let fileData: DroppedFile[] = [];
-      const jsonExists = await exists("netherite/drops.json", { baseDir: BaseDirectory.AppLocalData });
+      const jsonExists = await exists("netherite/drops/index.json", { baseDir: BaseDirectory.AppLocalData });
       if (jsonExists) {
         try {
-          const content = await readTextFile("netherite/drops.json", { baseDir: BaseDirectory.AppLocalData });
+          const content = await readTextFile("netherite/drops/index.json", { baseDir: BaseDirectory.AppLocalData });
           const parsed = JSON.parse(content);
           if (Array.isArray(parsed)) {
             if (parsed.length > 0 && typeof parsed[0] === "string") {
@@ -305,7 +305,7 @@ function App() {
             const existingNames = new Set(prev.map(f => f.name));
             const added = newFiles.filter(f => !existingNames.has(f.name));
             const next = [...prev, ...added];
-            writeTextFile("netherite/drops.json", JSON.stringify(next), { baseDir: BaseDirectory.AppLocalData }).catch(console.error);
+            writeTextFile("netherite/drops/index.json", JSON.stringify(next), { baseDir: BaseDirectory.AppLocalData }).catch(console.error);
             return next;
           });
         }
@@ -316,8 +316,16 @@ function App() {
       }
     });
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isDropOpenRef.current) {
+        toggleDropWindow(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
     return () => {
       unlistenDrop.then((f) => f());
+      window.removeEventListener("keydown", handleKeyDown);
     };
   }, []); // Use ref for tracking to avoid unlisten loops
 
@@ -345,8 +353,13 @@ function App() {
       const size = await appWindow.outerSize();
       const logicalSize = size.toLogical(factor);
 
-      // Animate smoothly by Tauri resizing natively
-      await appWindow.setSize(new LogicalSize(nextState ? 780 : 360, Math.round(logicalSize.height)));
+      if (nextState) {
+        await appWindow.setSize(new LogicalSize(780, Math.round(logicalSize.height)));
+      } else {
+        setTimeout(async () => {
+          await appWindow.setSize(new LogicalSize(360, Math.round(logicalSize.height)));
+        }, 200);
+      }
     } catch (err) {
       console.error("Window expansion logic failed", err);
     }
@@ -370,7 +383,7 @@ function App() {
     }
     setDroppedFiles((prev) => {
       const next = prev.filter((n) => n.name !== name);
-      writeTextFile("netherite/drops.json", JSON.stringify(next), { baseDir: BaseDirectory.AppLocalData }).catch(console.error);
+      writeTextFile("netherite/drops/index.json", JSON.stringify(next), { baseDir: BaseDirectory.AppLocalData }).catch(console.error);
       return next;
     });
   };
@@ -378,7 +391,7 @@ function App() {
   const words = wordCount(text);
 
   return (
-    <div className="app-container" style={{ opacity: opacity / 100 }}>
+    <div className={`app-container${isDropOpen ? " expanded" : ""}`} style={{ opacity: opacity / 100 }}>
       {/* ── MEMO PANEL ── */}
       <div className="window memo-panel">
         <div
@@ -501,14 +514,13 @@ function App() {
 
       {/* ── DROP PANEL ── */}
       {isDropOpen && (
-        <div className="window drop-panel-container">
+        <div className="window drop-panel-container fade-in">
           <div className="drop-window-layout h-full">
             <div className="airdrop-col" onClick={() => invoke("open_airdrop")}>
               <div className="airdrop-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentcolor" strokeWidth="1.5">
-                  <path d="M12 12A2.5 2.5 0 1 0 12 7.5 2.5 2.5 0 0 0 12 12Z" />
-                  <path d="M8 15.5A7 7 0 0 1 12 14.5A7 7 0 0 1 16 15.5" />
-                  <path d="M5 19.5A11 11 0 0 1 12 18A11 11 0 0 1 19 19.5" />
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 10.5 3.75-3.75 3.75 3.75M12 6.75v10.5" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
                 </svg>
                 <span>AirDrop</span>
               </div>
@@ -522,8 +534,8 @@ function App() {
               onDragLeave={preventDefault}
               onDrop={preventDefault}
             >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6H16a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v9" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
               </svg>
               <span className="drop-panel-text">Drop files here</span>
 
