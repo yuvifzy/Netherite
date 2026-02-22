@@ -43,12 +43,10 @@ body,
     -webkit-backdrop-filter: blur(60px) saturate(180%);
     backdrop-filter: blur(60px) saturate(180%);
     border-radius: 16px;
-    border: 0.5px solid rgba(255, 255, 255, 0.04);
     box-shadow:
-        0 0 0 0.5px rgba(0, 0, 0, 0.3),
+        0 0 0 0.5px rgba(255, 255, 255, 0.06),
         0 12px 40px rgba(0, 0, 0, 0.5),
-        0 40px 80px rgba(0, 0, 0, 0.3),
-        inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        6px 16px 60px rgba(0, 0, 0, 0.3);
     overflow: hidden;
     animation: hp-dropIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
