@@ -324,9 +324,6 @@ textarea::-webkit-scrollbar-thumb {
 }
 
 .file-btn {
-  position: absolute;
-  bottom: 10px;
-  right: 10px;
   width: 22px;
   height: 22px;
   border-radius: 6px;
@@ -338,7 +335,6 @@ textarea::-webkit-scrollbar-thumb {
   align-items: center;
   justify-content: center;
   transition: background 0.15s, color 0.15s;
-  z-index: 60;
 }
 
 .file-btn:hover {
@@ -415,99 +411,134 @@ textarea::-webkit-scrollbar-thumb {
   box-shadow: 0 0 6px var(--accent);
 }
 
-/* ── FILE DROP POPUP ── */
-.file-popup {
-  position: absolute;
-  bottom: 40px;
-  right: 10px;
-  width: 200px;
-  height: 160px;
-  background: rgba(30, 30, 32, 0.96);
-  border: 0.5px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 10px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  display: none;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 50;
-  animation: popIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.file-popup.visible {
+/* ── DROP WINDOW ── */
+.drop-window-layout {
   display: flex;
+  flex-direction: row;
+  padding: 8px;
+  gap: 8px;
+  align-items: stretch;
+  overflow: visible;
 }
 
-.drop-zone {
-  border: 1px dashed rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
+.airdrop-col {
+  width: 140px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.airdrop-col:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.airdrop-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.airdrop-btn svg {
+  width: 24px;
+  height: 24px;
+  color: var(--text-dim);
+}
+
+.airdrop-btn span {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.drop-divider {
+  width: 0.5px;
+  background: rgba(255, 255, 255, 0.07);
+  margin: 4px 0;
+}
+
+.drop-panel {
   flex: 1;
+  border: 1.5px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  cursor: default;
   transition: border-color 0.2s, background 0.2s;
+  position: relative;
 }
 
-.drop-zone.dragging-over {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+.drop-panel.dragging-over {
+  border-color: rgba(123, 123, 255, 0.5);
+  background: rgba(123, 123, 255, 0.08);
 }
 
-.drop-zone svg {
-  width: 16px;
-  height: 16px;
-  color: var(--text-muted);
+.drop-panel>svg {
+  width: 20px;
+  height: 20px;
+  color: rgba(255, 255, 255, 0.25);
   stroke-width: 1.4;
 }
 
-.drop-zone-text {
-  font-size: 10px;
+.drop-panel-text {
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
   color: rgba(255, 255, 255, 0.25);
   text-align: center;
-  font-family: 'Geist Mono', monospace;
 }
 
-.dropped-files {
+.drop-panel-files {
+  position: absolute;
+  bottom: 8px;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-height: 80px;
-  overflow-y: auto;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+  padding: 0 10px;
 }
 
-.dropped-file {
+.drop-pill {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 2px 6px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 4px 6px;
-  background: var(--surface);
-  border-radius: 6px;
+  gap: 4px;
+  font-family: 'Geist Mono', monospace;
   font-size: 9px;
   color: var(--text-dim);
-  font-family: 'Geist Mono', monospace;
+  cursor: grab;
 }
 
-.dropped-file span {
+.drop-pill:active {
+  cursor: grabbing;
+}
+
+.drop-pill>span {
+  max-width: 60px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 120px;
 }
 
-.remove-file {
+.drop-pill button {
   background: none;
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 10px;
-  padding: 0 2px;
   line-height: 1;
-  transition: color 0.15s;
+  margin-top: -1px;
 }
 
-.remove-file:hover {
+.drop-pill button:hover {
   color: #ff6b6b;
 }

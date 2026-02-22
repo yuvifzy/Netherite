@@ -12,7 +12,6 @@
     "fs:default",
     "core:window:allow-start-dragging",
     "core:window:allow-hide",
-    "core:window:allow-close",
     {
       "identifier": "fs:allow-applocaldata-read-recursive"
     },
@@ -26,15 +25,6 @@
       "identifier": "fs:allow-exists"
     },
     {
-      "identifier": "fs:allow-remove"
-    },
-    {
-      "identifier": "fs:allow-read-dir"
-    },
-    {
-      "identifier": "fs:allow-write-file"
-    },
-    {
       "identifier": "fs:scope",
       "allow": [
         {
@@ -42,12 +32,6 @@
         },
         {
           "path": "$APPLOCALDATA/netherite/*"
-        },
-        {
-          "path": "$APPLOCALDATA/netherite/drops"
-        },
-        {
-          "path": "$APPLOCALDATA/netherite/drops/*"
         }
       ]
     }

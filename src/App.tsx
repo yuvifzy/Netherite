@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { invoke } from "@tauri-apps/api/core";
 import { readTextFile, writeTextFile, exists, mkdir, BaseDirectory, writeFile, remove, readDir } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir } from "@tauri-apps/api/path";
 import "./App.css";
@@ -14,64 +15,13 @@ function wordCount(text: string): number {
   return trimmed.split(/\s+/).filter((w) => w.length > 0).length;
 }
 
-function App() {
-  const [text, setText] = useState("");
-  const [showSaved, setShowSaved] = useState(false);
-  const [fontSize, setFontSize] = useState<number>(() => {
-    const stored = localStorage.getItem("netherite-font-size");
-    return stored ? parseInt(stored, 10) : DEFAULT_FONT;
-  });
-  const [opacity, setOpacityState] = useState(100);
-  const [showOpacityPopup, setShowOpacityPopup] = useState(false);
-  const [showFilePopup, setShowFilePopup] = useState(false);
+function DropWindow() {
   const [droppedFiles, setDroppedFiles] = useState<string[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
-  const [activeBtns, setActiveBtns] = useState<Set<string>>(new Set());
-
-  const initialized = useRef(false);
-  const isUserEdit = useRef(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const opacityBtnRef = useRef<HTMLButtonElement>(null);
-  const opacityPopupRef = useRef<HTMLDivElement>(null);
-  const fileBtnRef = useRef<HTMLButtonElement>(null);
-  const filePopupRef = useRef<HTMLDivElement>(null);
-  const saveIndicatorTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const localDirRef = useRef<string>("");
 
-  // Auto-focus on window focus
-  useEffect(() => {
-    const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (focused) textareaRef.current?.focus();
-    });
-    return () => { unlisten.then((f) => f()); };
-  }, []);
-
-  // Cmd+W → hide window
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.metaKey && e.key.toLowerCase() === "w") {
-        e.preventDefault();
-        getCurrentWindow().hide();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
-
-  // Load file on mount
   useEffect(() => {
     async function load() {
-      const dirExists = await exists("netherite", { baseDir: BaseDirectory.AppLocalData });
-      if (!dirExists) await mkdir("netherite", { baseDir: BaseDirectory.AppLocalData });
-
-      const fileExists = await exists("netherite/memo.txt", { baseDir: BaseDirectory.AppLocalData });
-      if (fileExists) {
-        const contents = await readTextFile("netherite/memo.txt", { baseDir: BaseDirectory.AppLocalData });
-        setText(contents);
-      } else {
-        await writeTextFile("netherite/memo.txt", "", { baseDir: BaseDirectory.AppLocalData });
-      }
-
       // Initialize drops directory
       const dropsExists = await exists("netherite/drops", { baseDir: BaseDirectory.AppLocalData });
       if (!dropsExists) {
@@ -81,66 +31,29 @@ function App() {
         const fileNames = entries.filter((e) => e.isFile).map((e) => e.name);
         setDroppedFiles(fileNames);
       }
-
       localDirRef.current = await appLocalDataDir();
-      initialized.current = true;
     }
     load();
-  }, []);
 
-  // Debounced auto-save
-  useEffect(() => {
-    if (!initialized.current || !isUserEdit.current) return;
-    const timeout = setTimeout(async () => {
-      await writeTextFile("netherite/memo.txt", text, { baseDir: BaseDirectory.AppLocalData });
-      setShowSaved(true);
-      clearTimeout(saveIndicatorTimer.current);
-      saveIndicatorTimer.current = setTimeout(() => setShowSaved(false), 1200);
-    }, 600);
-    return () => clearTimeout(timeout);
-  }, [text]);
-
-  // Font size persistence
-  useEffect(() => {
-    localStorage.setItem("netherite-font-size", String(fontSize));
-  }, [fontSize]);
-
-  // Close popups on outside click
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        opacityBtnRef.current && !opacityBtnRef.current.contains(target) &&
-        opacityPopupRef.current && !opacityPopupRef.current.contains(target)
-      ) {
-        setShowOpacityPopup(false);
-      }
-      if (
-        fileBtnRef.current && !fileBtnRef.current.contains(target) &&
-        filePopupRef.current && !filePopupRef.current.contains(target)
-      ) {
-        setShowFilePopup(false);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        invoke("close_drop_window");
       }
     };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
+    window.addEventListener("keydown", handleKeyDown);
 
-  const handleOpacityChange = useCallback((val: number) => {
-    setOpacityState(val);
-  }, []);
-
-  const changeSize = (delta: number) => {
-    setFontSize((prev) => Math.min(MAX_FONT, Math.max(MIN_FONT, prev + delta)));
-  };
-
-  const toggleBtn = (id: string) => {
-    setActiveBtns((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
+    // Check if focused lost to close the window
+    const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (!focused) {
+        invoke("close_drop_window");
+      }
     });
-  };
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      unlisten.then((f) => f());
+    };
+  }, []);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -175,17 +88,170 @@ function App() {
     setDroppedFiles((prev) => prev.filter((n) => n !== name));
   };
 
+  return (
+    <div className="window drop-window-layout" style={{ animation: 'floatIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards' }}>
+      <div className="airdrop-col" onClick={() => invoke("open_airdrop")}>
+        <div className="airdrop-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentcolor" strokeWidth="1.5">
+            <path d="M12 12A2.5 2.5 0 1 0 12 7.5 2.5 2.5 0 0 0 12 12Z" />
+            <path d="M8 15.5A7 7 0 0 1 12 14.5A7 7 0 0 1 16 15.5" />
+            <path d="M5 19.5A11 11 0 0 1 12 18A11 11 0 0 1 19 19.5" />
+          </svg>
+          <span>AirDrop</span>
+        </div>
+      </div>
+
+      <div className="drop-divider" />
+
+      <div
+        className={`drop-panel${isDraggingOver ? " dragging-over" : ""}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6H16a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v9" />
+        </svg>
+        <span className="drop-panel-text">Drop files here</span>
+
+        {droppedFiles.length > 0 && (
+          <div className="drop-panel-files">
+            {droppedFiles.map((name, i) => (
+              <div
+                key={i}
+                className="drop-pill"
+                draggable
+                onDragStart={(e) => {
+                  if (localDirRef.current) {
+                    const absolutePath = `${localDirRef.current}/netherite/drops/${name}`.replace(/[\/\\]+/g, '/');
+                    e.dataTransfer.setData("DownloadURL", `application/octet-stream:${name}:file://${absolutePath}`);
+                  }
+                }}
+              >
+                <span>{name}</span>
+                <button onClick={() => removeFileHandler(name)}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MainWindow() {
+  const [text, setText] = useState("");
+  const [showSaved, setShowSaved] = useState(false);
+  const [fontSize, setFontSize] = useState<number>(() => {
+    const stored = localStorage.getItem("netherite-font-size");
+    return stored ? parseInt(stored, 10) : DEFAULT_FONT;
+  });
+  const [opacity, setOpacityState] = useState(100);
+  const [showOpacityPopup, setShowOpacityPopup] = useState(false);
+  const [activeBtns, setActiveBtns] = useState<Set<string>>(new Set());
+
+  const initialized = useRef(false);
+  const isUserEdit = useRef(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const opacityBtnRef = useRef<HTMLButtonElement>(null);
+  const opacityPopupRef = useRef<HTMLDivElement>(null);
+  const saveIndicatorTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Auto-focus on window focus
+  useEffect(() => {
+    const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (focused) textareaRef.current?.focus();
+    });
+    return () => { unlisten.then((f) => f()); };
+  }, []);
+
+  // Cmd+W → hide window
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        getCurrentWindow().hide();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Load file on mount
+  useEffect(() => {
+    async function load() {
+      const dirExists = await exists("netherite", { baseDir: BaseDirectory.AppLocalData });
+      if (!dirExists) await mkdir("netherite", { baseDir: BaseDirectory.AppLocalData });
+
+      const fileExists = await exists("netherite/memo.txt", { baseDir: BaseDirectory.AppLocalData });
+      if (fileExists) {
+        const contents = await readTextFile("netherite/memo.txt", { baseDir: BaseDirectory.AppLocalData });
+        setText(contents);
+      } else {
+        await writeTextFile("netherite/memo.txt", "", { baseDir: BaseDirectory.AppLocalData });
+      }
+      initialized.current = true;
+    }
+    load();
+  }, []);
+
+  // Debounced auto-save
+  useEffect(() => {
+    if (!initialized.current || !isUserEdit.current) return;
+    const timeout = setTimeout(async () => {
+      await writeTextFile("netherite/memo.txt", text, { baseDir: BaseDirectory.AppLocalData });
+      setShowSaved(true);
+      clearTimeout(saveIndicatorTimer.current);
+      saveIndicatorTimer.current = setTimeout(() => setShowSaved(false), 1200);
+    }, 600);
+    return () => clearTimeout(timeout);
+  }, [text]);
+
+  // Font size persistence
+  useEffect(() => {
+    localStorage.setItem("netherite-font-size", String(fontSize));
+  }, [fontSize]);
+
+  // Close popups on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        opacityBtnRef.current && !opacityBtnRef.current.contains(target) &&
+        opacityPopupRef.current && !opacityPopupRef.current.contains(target)
+      ) {
+        setShowOpacityPopup(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const handleOpacityChange = useCallback((val: number) => {
+    setOpacityState(val);
+  }, []);
+
+  const changeSize = (delta: number) => {
+    setFontSize((prev) => Math.min(MAX_FONT, Math.max(MIN_FONT, prev + delta)));
+  };
+
+  const toggleBtn = (id: string) => {
+    setActiveBtns((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
   const words = wordCount(text);
 
   return (
     <div className="window" id="window" style={{ opacity: opacity / 100 }}>
-
       {/* ── DRAG HANDLE ── */}
       <div
         className="handle"
         data-tauri-drag-region
         onMouseDown={async (e) => {
-          // Only drag if clicking on the handle bar itself, not buttons
           if ((e.target as HTMLElement).closest(".handle-right")) return;
           await getCurrentWindow().startDragging();
         }}
@@ -196,7 +262,6 @@ function App() {
         </div>
 
         <div className="handle-right" onMouseDown={(e) => e.stopPropagation()}>
-          {/* To-do */}
           <button
             className={`btn${activeBtns.has("todo") ? " active" : ""}`}
             data-tip="To-do list"
@@ -207,7 +272,6 @@ function App() {
             </svg>
           </button>
 
-          {/* Home */}
           <button
             className={`btn${activeBtns.has("home") ? " active" : ""}`}
             data-tip="Home"
@@ -218,7 +282,6 @@ function App() {
             </svg>
           </button>
 
-          {/* New Note */}
           <button
             className={`btn${activeBtns.has("new") ? " active" : ""}`}
             data-tip="New note (⌘N)"
@@ -231,7 +294,6 @@ function App() {
 
           <div className="btn-divider" />
 
-          {/* Opacity */}
           <button
             ref={opacityBtnRef}
             className={`btn${showOpacityPopup ? " active" : ""}`}
@@ -247,7 +309,6 @@ function App() {
         </div>
       </div>
 
-      {/* ── OPACITY POPUP ── */}
       {showOpacityPopup && (
         <div ref={opacityPopupRef} className="opacity-popup visible">
           <span className="popup-label">Window opacity</span>
@@ -279,43 +340,6 @@ function App() {
         />
       </div>
 
-      {/* ── FILE DROP POPUP ── */}
-      {showFilePopup && (
-        <div ref={filePopupRef} className="file-popup visible">
-          <div
-            className={`drop-zone${isDraggingOver ? " dragging-over" : ""}`}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6H16a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v9" />
-            </svg>
-            <span className="drop-zone-text">Drop files here<br />to store temporarily</span>
-          </div>
-          {droppedFiles.length > 0 && (
-            <div className="dropped-files">
-              {droppedFiles.map((name, i) => (
-                <div
-                  key={i}
-                  className="dropped-file"
-                  draggable
-                  onDragStart={(e) => {
-                    if (localDirRef.current) {
-                      const absolutePath = `${localDirRef.current}/netherite/drops/${name}`.replace(/[\/\\]+/g, '/');
-                      e.dataTransfer.setData("DownloadURL", `application/octet-stream:${name}:file://${absolutePath}`);
-                    }
-                  }}
-                >
-                  <span>{name}</span>
-                  <button className="remove-file" onClick={() => removeFileHandler(name)}>×</button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ── BOTTOM BAR ── */}
       <div className="bottom-bar">
         <div className="bottom-left">
@@ -330,23 +354,36 @@ function App() {
 
         <div className="bottom-right">
           <span className={`saved-indicator${showSaved ? " show" : ""}`}>saved</span>
+          <button
+            className="file-btn"
+            data-tip="File drop"
+            onClick={() => invoke("open_drop_window")}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M20 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" />
+              <path d="M16 3H8L6 7h12l-2-4z" />
+            </svg>
+          </button>
         </div>
       </div>
-
-      <button
-        ref={fileBtnRef}
-        className="file-btn"
-        data-tip="File drop"
-        onClick={() => setShowFilePopup((v) => !v)}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path d="M20 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" />
-          <path d="M16 3H8L6 7h12l-2-4z" />
-        </svg>
-      </button>
-
     </div>
   );
+}
+
+function App() {
+  const [isDropWindow, setIsDropWindow] = useState(false);
+
+  useEffect(() => {
+    // Determine which window we're rendering
+    if (getCurrentWindow().label === "drop" || window.location.search.includes("window=drop")) {
+      setIsDropWindow(true);
+    }
+  }, []);
+
+  if (isDropWindow) {
+    return <DropWindow />;
+  }
+  return <MainWindow />;
 }
 
 export default App;
