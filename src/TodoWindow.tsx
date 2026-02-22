@@ -16,6 +16,7 @@ export default function TodoWindow() {
     const [inputValue, setInputValue] = useState("");
     const [isFocused, setIsFocused] = useState(false);
     const [isClosing, setIsClosing] = useState(false);
+    const [isDimmed, setIsDimmed] = useState(false);
     const initialized = useRef(false);
 
     const searchParams = new URLSearchParams(window.location.search);
@@ -49,6 +50,15 @@ export default function TodoWindow() {
             closeWindow();
         });
         return () => { unlisten.then(f => f()); };
+    }, []);
+
+    useEffect(() => {
+        const u1 = listen("memo-dragging", () => setIsDimmed(true));
+        const u2 = listen("memo-drag-stopped", () => setIsDimmed(false));
+        return () => {
+            u1.then(f => f());
+            u2.then(f => f());
+        };
     }, []);
 
     useEffect(() => {
@@ -123,7 +133,11 @@ export default function TodoWindow() {
     const doneTodos = todos.filter((t) => t.done).sort((a, b) => b.createdAt - a.createdAt);
 
     return (
-        <div key={animKey} className={`todo-window ${isClosing ? "closing" : ""}`} style={{ transformOrigin: `${ox}px ${oy}px` }}>
+        <div
+            key={animKey}
+            className={`todo-window ${isClosing ? "closing" : ""} ${isDimmed ? "dimmed" : ""}`}
+            style={{ transformOrigin: `${ox}px ${oy}px` }}
+        >
             <div className="todo-handle" data-tauri-drag-region>
                 <div className="todo-handle-left">
                     <div className="todo-dot" />

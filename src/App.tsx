@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { readTextFile, writeTextFile, exists, mkdir, BaseDirectory, remove, readDir, copyFile, readFile } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-shell";
@@ -436,6 +436,19 @@ function App() {
 
   const words = wordCount(text);
 
+  // Emit drag events so secondary windows can fade during repositioning
+  const isDraggingRef = useRef(false);
+  useEffect(() => {
+    const onMouseUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        emit("memo-drag-stopped");
+      }
+    };
+    document.addEventListener("mouseup", onMouseUp);
+    return () => document.removeEventListener("mouseup", onMouseUp);
+  }, []);
+
   return (
     <div className="app-container" style={{ opacity: opacity / 100 }}>
       {/* ── MEMO PANEL ── */}
@@ -445,6 +458,8 @@ function App() {
           data-tauri-drag-region
           onMouseDown={async (e) => {
             if ((e.target as HTMLElement).closest(".handle-right")) return;
+            isDraggingRef.current = true;
+            emit("memo-dragging");
             await getCurrentWindow().startDragging();
           }}
         >

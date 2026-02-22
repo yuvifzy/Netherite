@@ -34,7 +34,13 @@ body,
   width: 100vw;
   height: 100vh;
   box-sizing: border-box;
+  transition: opacity 200ms ease;
   animation: floatInTodo 300ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.todo-window.dimmed {
+  opacity: 0.25;
+  transition: opacity 150ms ease;
 }
 
 .todo-window.closing {
