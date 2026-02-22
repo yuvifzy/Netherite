@@ -170,6 +170,7 @@ function App() {
   const [activeBtns, setActiveBtns] = useState<Set<string>>(new Set());
 
   const [isDropOpen, setIsDropOpen] = useState(false);
+  const isDropOpenRef = useRef(false);
   const [droppedFiles, setDroppedFiles] = useState<DroppedFile[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const localDirRef = useRef<string>("");
@@ -253,7 +254,9 @@ function App() {
 
     const unlistenDrop = getCurrentWindow().onDragDropEvent(async (event) => {
       // Auto-open logic
-      if (!isDropOpen && (event.payload.type === "enter" || event.payload.type === "over")) {
+      if (!isDropOpenRef.current && (event.payload.type === "enter" || event.payload.type === "over")) {
+        // Prevent toggle spam
+        isDropOpenRef.current = true;
         toggleDropWindow(true);
       }
 
@@ -316,7 +319,7 @@ function App() {
     return () => {
       unlistenDrop.then((f) => f());
     };
-  }, [isDropOpen]); // Needed specifically to track the closure value of isDropOpen
+  }, []); // Use ref for tracking to avoid unlisten loops
 
   // Debounced auto-save
   useEffect(() => {
@@ -331,17 +334,22 @@ function App() {
   }, [text]);
 
   const toggleDropWindow = async (forceOpenState?: boolean) => {
-    const nextState = forceOpenState !== undefined ? forceOpenState : !isDropOpen;
-    if (nextState === isDropOpen) return;
-    setIsDropOpen(nextState);
+    try {
+      const nextState = forceOpenState !== undefined ? forceOpenState : !isDropOpenRef.current;
+      if (nextState === isDropOpenRef.current && forceOpenState === undefined) return;
+      isDropOpenRef.current = nextState;
+      setIsDropOpen(nextState);
 
-    const window = getCurrentWindow();
-    const factor = await window.scaleFactor();
-    const size = await window.outerSize();
-    const logicalSize = size.toLogical(factor);
+      const appWindow = getCurrentWindow();
+      const factor = await appWindow.scaleFactor();
+      const size = await appWindow.outerSize();
+      const logicalSize = size.toLogical(factor);
 
-    // Animate smoothly by Tauri resizing natively
-    await window.setSize(new LogicalSize(nextState ? 780 : 360, logicalSize.height));
+      // Animate smoothly by Tauri resizing natively
+      await appWindow.setSize(new LogicalSize(nextState ? 780 : 360, Math.round(logicalSize.height)));
+    } catch (err) {
+      console.error("Window expansion logic failed", err);
+    }
   };
 
   const toggleBtn = (id: string) => {
