@@ -174,11 +174,11 @@ export default function HomePanel() {
     }, [loadNotes]);
 
     // ── Close animation ────────────────────────────────────────────────────
-    const closePanel = () => {
+    const closePanel = useCallback(() => {
         setIsClosing(true);
         emit("home-state", false);
         setTimeout(() => getCurrentWindow().hide(), 300);
-    };
+    }, []);
 
     // ── Keyboard ──────────────────────────────────────────────────────────
     useEffect(() => {
@@ -190,13 +190,13 @@ export default function HomePanel() {
         };
         window.addEventListener("keydown", handle);
         return () => window.removeEventListener("keydown", handle);
-    }, [drawerOpen]);
+    }, [drawerOpen, closePanel]);
 
     // ── listen for close-animated event (from home button re-click) ───────
     useEffect(() => {
         const u = listen("home-close-animated", () => closePanel());
         return () => { u.then(f => f()); };
-    }, []);
+    }, [closePanel]);
 
     // ── Activity tabs ──────────────────────────────────────────────────────
     function buildActivity(tab: "today" | "yesterday" | "week"): ActivityItem[] {
@@ -272,7 +272,10 @@ export default function HomePanel() {
     const displayTodos = [...activeTodos, ...doneTodos];
 
     return (
-        <div className={`hp-root ${isDimmed ? "dimmed" : ""}`}>
+        <div
+            className={`hp-root ${isDimmed ? "dimmed" : ""}`}
+            onClick={(e) => { if (e.target === e.currentTarget) closePanel(); }}
+        >
             <div className={`hp-panel ${isClosing ? "closing" : ""}`}>
 
                 {/* ── SEARCH BAR ── */}

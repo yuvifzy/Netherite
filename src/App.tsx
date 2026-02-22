@@ -533,7 +533,6 @@ function App() {
 
             <button
               className={`btn${activeBtns.has("home") ? " active" : ""}`}
-              data-tip="Home"
               onClick={() => toggleBtn("home")}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
