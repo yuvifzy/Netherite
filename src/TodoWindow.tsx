@@ -45,6 +45,13 @@ export default function TodoWindow() {
     }, []);
 
     useEffect(() => {
+        const unlisten = listen("todo-close-animated", () => {
+            closeWindow();
+        });
+        return () => { unlisten.then(f => f()); };
+    }, []);
+
+    useEffect(() => {
         async function init() {
             const fileExists = await exists("netherite/todos.json", { baseDir: BaseDirectory.AppLocalData });
             if (fileExists) {
