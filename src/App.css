@@ -36,11 +36,18 @@ body,
   font-family: 'Geist Mono', monospace;
 }
 
-/* ── WINDOW ── */
+/* ── APP LAYOUT ── */
+.app-container {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  gap: 8px;
+  overflow: hidden;
+  align-items: stretch;
+}
+
 .window {
   position: relative;
-  width: 100vw;
-  height: 100vh;
   border-radius: var(--radius);
   background: var(--bg);
   -webkit-backdrop-filter: blur(40px) saturate(160%);
@@ -55,7 +62,22 @@ body,
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100%;
   animation: floatIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.memo-panel {
+  width: 360px;
+  flex-shrink: 0;
+}
+
+.drop-panel-container {
+  width: 412px;
+  flex-shrink: 0;
+}
+
+.h-full {
+  height: 100%;
 }
 
 @keyframes floatIn {
