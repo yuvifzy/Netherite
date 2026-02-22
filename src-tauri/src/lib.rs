@@ -122,18 +122,27 @@ pub fn run() {
                 let _ = main_window.show();
                 let _ = main_window.set_focus();
 
-                // Track window movement
-                let main_window_clone = main_window.clone();
-                main_window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::Moved(pos) = event {
-                        if let Some(drop_window) = main_window_clone.app_handle().get_webview_window("drop") {
-                            if let Ok(main_size) = main_window_clone.outer_size() {
-                                if let Ok(scale_factor) = main_window_clone.scale_factor() {
-                                    let logical_main_size = main_size.to_logical::<f64>(scale_factor);
-                                    let logical_main_pos = pos.to_logical::<f64>(scale_factor);
-                                    let x = logical_main_pos.x + logical_main_size.width + 8.0;
-                                    let y = logical_main_pos.y;
-                                    let _ = drop_window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)));
+                // Track window movement via polling for smooth 60fps
+                let app_handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    let mut last_pos = tauri::PhysicalPosition::new(0, 0);
+                    loop {
+                        std::thread::sleep(std::time::Duration::from_millis(16));
+                        if let Some(main_window) = app_handle.get_webview_window("main") {
+                            if let Some(drop_window) = app_handle.get_webview_window("drop") {
+                                if let Ok(pos) = main_window.outer_position() {
+                                    if pos.x != last_pos.x || pos.y != last_pos.y {
+                                        last_pos = pos;
+                                        if let Ok(main_size) = main_window.outer_size() {
+                                            if let Ok(scale_factor) = main_window.scale_factor() {
+                                                let logical_main_size = main_size.to_logical::<f64>(scale_factor);
+                                                let logical_main_pos = pos.to_logical::<f64>(scale_factor);
+                                                let x = logical_main_pos.x + logical_main_size.width + 8.0;
+                                                let y = logical_main_pos.y;
+                                                let _ = drop_window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(x, y)));
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

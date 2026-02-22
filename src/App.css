@@ -495,50 +495,106 @@ textarea::-webkit-scrollbar-thumb {
   text-align: center;
 }
 
+.drop-panel.has-files>svg,
+.drop-panel.has-files>.drop-panel-text {
+  opacity: 0.1;
+  pointer-events: none;
+}
+
 .drop-panel-files {
   position: absolute;
-  bottom: 8px;
+  top: 10px;
+  bottom: 10px;
+  left: 10px;
+  right: 10px;
   display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  justify-content: center;
-  width: 100%;
-  padding: 0 10px;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  align-items: center;
+  justify-content: flex-start;
+  z-index: 10;
 }
 
-.drop-pill {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  padding: 2px 6px;
+.drop-card {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 6px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-family: 'Geist Mono', monospace;
-  font-size: 9px;
-  color: var(--text-dim);
+  gap: 8px;
   cursor: grab;
+  position: relative;
+  flex-shrink: 0;
+  width: 140px;
+  box-sizing: border-box;
 }
 
-.drop-pill:active {
+.drop-card:active {
   cursor: grabbing;
 }
 
-.drop-pill>span {
-  max-width: 60px;
+.drop-card-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.drop-card-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  background: rgba(123, 123, 255, 0.15);
+  color: var(--accent);
+  font-family: 'Geist Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.drop-card-name {
+  font-family: 'Geist Mono', monospace;
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.5);
+  max-width: 80px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.drop-pill button {
-  background: none;
+.drop-card-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
   border: none;
-  color: var(--text-muted);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  line-height: 1;
-  margin-top: -1px;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s;
 }
 
-.drop-pill button:hover {
-  color: #ff6b6b;
+.drop-card-remove svg {
+  width: 10px;
+  height: 10px;
+  stroke-width: 2;
+}
+
+.drop-card:hover .drop-card-remove {
+  opacity: 1;
+}
+
+.drop-card-remove:hover {
+  background: #ff6b6b;
 }

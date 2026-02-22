@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
-import { readTextFile, writeTextFile, exists, mkdir, BaseDirectory, remove, readDir, copyFile } from "@tauri-apps/plugin-fs";
+import { readTextFile, writeTextFile, exists, mkdir, BaseDirectory, remove, readDir, copyFile, readFile } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir } from "@tauri-apps/api/path";
 import "./App.css";
 
@@ -15,8 +15,45 @@ function wordCount(text: string): number {
   return trimmed.split(/\s+/).filter((w) => w.length > 0).length;
 }
 
+interface DroppedFile {
+  name: string;
+  previewUrl: string | null;
+  ext: string;
+}
+
+async function generateThumbnail(fileBuf: Uint8Array, type: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    const blob = new Blob([fileBuf as any], { type });
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 48;
+      canvas.height = 48;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        const scale = Math.max(48 / img.width, 48 / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        const x = (48 - w) / 2;
+        const y = (48 - h) / 2;
+        ctx.drawImage(img, x, y, w, h);
+        resolve(canvas.toDataURL("image/webp", 0.8));
+      } else {
+        resolve(null);
+      }
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = () => {
+      resolve(null);
+      URL.revokeObjectURL(url);
+    };
+    img.src = url;
+  });
+}
+
 function DropWindow() {
-  const [droppedFiles, setDroppedFiles] = useState<string[]>([]);
+  const [droppedFiles, setDroppedFiles] = useState<DroppedFile[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const localDirRef = useRef<string>("");
 
@@ -28,18 +65,31 @@ function DropWindow() {
         await mkdir("netherite/drops", { baseDir: BaseDirectory.AppLocalData, recursive: true });
       }
 
-      let fileNames: string[] = [];
+      let fileData: DroppedFile[] = [];
       const jsonExists = await exists("netherite/drops.json", { baseDir: BaseDirectory.AppLocalData });
       if (jsonExists) {
         try {
           const content = await readTextFile("netherite/drops.json", { baseDir: BaseDirectory.AppLocalData });
-          fileNames = JSON.parse(content);
+          const parsed = JSON.parse(content);
+          if (Array.isArray(parsed)) {
+            if (parsed.length > 0 && typeof parsed[0] === "string") {
+              fileData = parsed.map((name: string) => {
+                const parts = name.split('.');
+                return { name, previewUrl: null, ext: parts.length > 1 ? parts.pop()!.toUpperCase() : "FILE" };
+              });
+            } else {
+              fileData = parsed;
+            }
+          }
         } catch { }
       } else if (dropsExists) {
         const entries = await readDir("netherite/drops", { baseDir: BaseDirectory.AppLocalData });
-        fileNames = entries.filter((e) => e.isFile).map((e) => e.name);
+        fileData = entries.filter((e) => e.isFile).map((e) => {
+          const parts = e.name.split('.');
+          return { name: e.name, previewUrl: null, ext: parts.length > 1 ? parts.pop()!.toUpperCase() : "FILE" };
+        });
       }
-      setDroppedFiles(fileNames);
+      setDroppedFiles(fileData);
       localDirRef.current = await appLocalDataDir();
     }
     load();
@@ -54,20 +104,39 @@ function DropWindow() {
     const unlistenDrop = getCurrentWindow().onDragDropEvent(async (event) => {
       if (event.payload.type === "drop") {
         setIsDraggingOver(false);
-        const newFiles: string[] = [];
+        const newFiles: DroppedFile[] = [];
         for (const path of event.payload.paths) {
           const nameMatch = path.match(/[^\/\\]+$/);
           const name = nameMatch ? nameMatch[0] : "unknown";
+
+          let previewUrl: string | null = null;
+          const extParts = name.split(".");
+          const ext = extParts.length > 1 ? extParts.pop()!.toUpperCase() : "FILE";
+
           try {
             await copyFile(path, `netherite/drops/${name}`, { toPathBaseDir: BaseDirectory.AppLocalData });
-            newFiles.push(name);
           } catch (err) {
             console.error("Failed to copy file", err);
+            continue;
           }
+
+          try {
+            const isImage = /^(JPG|JPEG|PNG|GIF|WEBP)$/i.test(ext);
+            if (isImage) {
+              const fileData = await readFile(`netherite/drops/${name}`, { baseDir: BaseDirectory.AppLocalData });
+              previewUrl = await generateThumbnail(fileData, `image/${ext.toLowerCase()}`);
+            }
+          } catch (err) {
+            console.error("Thumbnail gen failed", err);
+          }
+
+          newFiles.push({ name, previewUrl, ext });
         }
         if (newFiles.length > 0) {
           setDroppedFiles((prev) => {
-            const next = Array.from(new Set([...prev, ...newFiles]));
+            const existingNames = new Set(prev.map(f => f.name));
+            const added = newFiles.filter(f => !existingNames.has(f.name));
+            const next = [...prev, ...added];
             writeTextFile("netherite/drops.json", JSON.stringify(next), { baseDir: BaseDirectory.AppLocalData }).catch(console.error);
             return next;
           });
@@ -96,7 +165,7 @@ function DropWindow() {
       console.error("Failed to delete file", err);
     }
     setDroppedFiles((prev) => {
-      const next = prev.filter((n) => n !== name);
+      const next = prev.filter((n) => n.name !== name);
       writeTextFile("netherite/drops.json", JSON.stringify(next), { baseDir: BaseDirectory.AppLocalData }).catch(console.error);
       return next;
     });
@@ -118,7 +187,7 @@ function DropWindow() {
       <div className="drop-divider" />
 
       <div
-        className={`drop-panel${isDraggingOver ? " dragging-over" : ""}`}
+        className={`drop-panel${isDraggingOver ? " dragging-over" : ""}${droppedFiles.length > 0 ? " has-files" : ""}`}
         onDragOver={preventDefault}
         onDragLeave={preventDefault}
         onDrop={preventDefault}
@@ -130,20 +199,29 @@ function DropWindow() {
 
         {droppedFiles.length > 0 && (
           <div className="drop-panel-files">
-            {droppedFiles.map((name, i) => (
+            {droppedFiles.map((file, i) => (
               <div
                 key={i}
-                className="drop-pill"
+                className="drop-card"
                 draggable
                 onDragStart={(e) => {
                   if (localDirRef.current) {
-                    const absolutePath = `${localDirRef.current}/netherite/drops/${name}`.replace(/[\/\\]+/g, '/');
-                    e.dataTransfer.setData("DownloadURL", `application/octet-stream:${name}:file://${absolutePath}`);
+                    const absolutePath = `${localDirRef.current}/netherite/drops/${file.name}`.replace(/[\/\\]+/g, '/');
+                    e.dataTransfer.setData("DownloadURL", `application/octet-stream:${file.name}:file://${absolutePath}`);
                   }
                 }}
               >
-                <span>{name}</span>
-                <button onClick={() => removeFileHandler(name)}>×</button>
+                {file.previewUrl ? (
+                  <img src={file.previewUrl} alt={file.name} className="drop-card-thumb" draggable={false} />
+                ) : (
+                  <div className="drop-card-badge">{file.ext.substring(0, 4)}</div>
+                )}
+                <span className="drop-card-name">{file.name}</span>
+                <button className="drop-card-remove" onClick={() => removeFileHandler(file.name)}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             ))}
           </div>
