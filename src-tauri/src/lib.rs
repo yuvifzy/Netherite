@@ -65,20 +65,6 @@ fn setup_main_window(window: tauri::WebviewWindow) {
     let mw = window.clone();
     window.on_window_event(move |event| {
         match event {
-            tauri::WindowEvent::Moved(_) => {
-                if let Some(todo_window) = app_handle.get_webview_window("todo") {
-                    if todo_window.is_visible().unwrap_or(false) {
-                        if let Ok(outer_pos) = mw.outer_position() {
-                            if let Ok(factor) = mw.scale_factor() {
-                                let logical_pos = outer_pos.to_logical::<f64>(factor);
-                                let offset_x = logical_pos.x - 328.0;
-                                let offset_y = logical_pos.y;
-                                let _ = todo_window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(offset_x, offset_y)));
-                            }
-                        }
-                    }
-                }
-            }
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 let _ = mw.hide();
                 api.prevent_close();

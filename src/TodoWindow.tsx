@@ -15,7 +15,17 @@ export default function TodoWindow() {
     const [todos, setTodos] = useState<TodoPayload[]>([]);
     const [inputValue, setInputValue] = useState("");
     const [isFocused, setIsFocused] = useState(false);
+    const [isClosing, setIsClosing] = useState(false);
     const initialized = useRef(false);
+
+    const closeWindow = () => {
+        setIsClosing(true);
+        setTimeout(() => {
+            getCurrentWindow().hide();
+            emit("todo-state", false);
+            setIsClosing(false);
+        }, 280);
+    };
 
     useEffect(() => {
         async function init() {
@@ -35,11 +45,9 @@ export default function TodoWindow() {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.metaKey && e.key.toLowerCase() === "w") {
                 e.preventDefault();
-                getCurrentWindow().hide();
-                emit("todo-state", false);
+                closeWindow();
             } else if (e.key === "Escape") {
-                getCurrentWindow().hide();
-                emit("todo-state", false);
+                closeWindow();
             }
         };
         window.addEventListener("keydown", handleKeyDown);
@@ -91,13 +99,13 @@ export default function TodoWindow() {
     const doneTodos = todos.filter((t) => t.done).sort((a, b) => b.createdAt - a.createdAt);
 
     return (
-        <div className="todo-window">
+        <div className={`todo-window ${isClosing ? "closing" : ""}`}>
             <div className="todo-handle" data-tauri-drag-region>
                 <div className="todo-handle-left">
                     <div className="todo-dot" />
                     <span className="todo-name">to-do</span>
                 </div>
-                <button className="todo-close" onClick={() => { getCurrentWindow().hide(); emit("todo-state", false); }}>
+                <button className="todo-close" onClick={closeWindow}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                         <path d="M18 6L6 18M6 6l12 12" />
                     </svg>
