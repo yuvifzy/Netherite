@@ -143,6 +143,26 @@ export default function HomePanel() {
         return () => { emit("home-state", false); };
     }, []);
 
+    // ── note-created — refresh notes list in real time ────────────────────
+    useEffect(() => {
+        const u = listen<string>("note-created", async (event) => {
+            const filename = event.payload;
+            try {
+                const content = await readTextFile(`netherite/${filename}`, { baseDir: BaseDirectory.AppLocalData });
+                const firstLine = content.split("\n").find(l => l.trim()) || filename.replace(".txt", "");
+                const newNote: NoteFile = {
+                    name: filename,
+                    firstLine: firstLine.slice(0, 80),
+                    content,
+                    modified: "just now",
+                    ts: Date.now(),
+                };
+                setNotes(prev => [newNote, ...prev].slice(0, 10));
+            } catch { }
+        });
+        return () => { u.then(f => f()); };
+    }, []);
+
     // ── Close animation ────────────────────────────────────────────────────
     const closePanel = () => {
         setIsClosing(true);
@@ -326,7 +346,7 @@ export default function HomePanel() {
                             </div>
                             <div style={{ display: "flex", gap: 6 }}>
                                 <button className="hp-card-action" onClick={() => { setDrawerOpen(true); setTimeout(() => drawerSearchRef.current?.focus(), 50); }}>all notes</button>
-                                <button className="hp-card-action" onClick={() => invoke("open_new_note").catch(() => { })}>+ new</button>
+                                <button className="hp-card-action" onClick={() => invoke("spawn_note_window").catch(() => { })}>+ new</button>
                             </div>
                         </div>
                         <div className="hp-notes-list">

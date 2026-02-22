@@ -432,6 +432,15 @@ function App() {
       return;
     }
 
+    if (id === "new") {
+      try {
+        await invoke("spawn_note_window");
+      } catch (err) {
+        console.error("Failed to spawn note window:", err);
+      }
+      return;
+    }
+
     setActiveBtns((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);

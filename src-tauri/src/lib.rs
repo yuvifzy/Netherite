@@ -143,6 +143,73 @@ async fn open_home_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// Cascade state: protected by a Mutex so concurrent calls don't race
+use std::sync::Mutex;
+static CASCADE_COUNT: Mutex<u32> = Mutex::new(0);
+
+#[tauri::command]
+async fn spawn_note_window(app: tauri::AppHandle) -> Result<String, String> {
+    // 1. Create the save file path
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let filename = format!("note_{}.txt", ts);
+    let label = format!("note_{}", ts);
+
+    // Ensure netherite/ dir exists and write empty file
+    let data_dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    let netherite_dir = data_dir.join("netherite");
+    if !netherite_dir.exists() {
+        std::fs::create_dir_all(&netherite_dir).map_err(|e| e.to_string())?;
+    }
+    let note_path = netherite_dir.join(&filename);
+    std::fs::write(&note_path, "").map_err(|e| e.to_string())?;
+
+    // 2. Cascade position (base from main window, 24px per step, reset every 8)
+    let cascade_step = {
+        let mut count = CASCADE_COUNT.lock().unwrap();
+        let step = *count % 8;
+        *count += 1;
+        step
+    };
+
+    let (base_x, base_y) = if let Some(main) = app.get_webview_window("main") {
+        if let Ok(pos) = main.outer_position() {
+            let factor = main.scale_factor().unwrap_or(1.0);
+            let lp = pos.to_logical::<f64>(factor);
+            (lp.x + 40.0, lp.y + 40.0)
+        } else {
+            (200.0, 200.0)
+        }
+    } else {
+        (200.0, 200.0)
+    };
+
+    let offset = cascade_step as f64 * 24.0;
+    let pos_x = base_x + offset;
+    let pos_y = base_y + offset;
+
+    // 3. Spawn the window — URL carries filename so App can read it
+    let url = format!("/?window=note&file={}", filename);
+    WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
+        .title("note")
+        .inner_size(360.0, 280.0)
+        .min_inner_size(280.0, 160.0)
+        .position(pos_x, pos_y)
+        .decorations(false)
+        .always_on_top(true)
+        .transparent(true)
+        .skip_taskbar(true)
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    // 4. Notify home panel so it can refresh its notes list
+    let _ = app.emit("note-created", &filename);
+
+    Ok(filename)
+}
+
 fn setup_main_window(window: tauri::WebviewWindow) {
     let app_handle = window.app_handle().clone();
     let mw = window.clone();
@@ -235,9 +302,23 @@ pub fn run() {
                 })
                 .build()
         )
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_shortcut("CmdOrCtrl+N")
+                .unwrap()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        let app2 = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = spawn_note_window(app2).await;
+                        });
+                    }
+                })
+                .build()
+        )
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, open_airdrop, get_note_files, open_todo_window, open_home_window])
+        .invoke_handler(tauri::generate_handler![greet, open_airdrop, get_note_files, open_todo_window, open_home_window, spawn_note_window])
 
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
