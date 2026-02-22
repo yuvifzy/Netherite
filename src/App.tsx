@@ -191,6 +191,20 @@ function App() {
     return () => { unlisten.then((f) => f()); };
   }, []);
 
+  // Cmd+W → hide window natively
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        getCurrentWindow().hide();
+      } else if (e.key === "Escape") {
+        getCurrentWindow().hide();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Drop files feature
   useEffect(() => {
     async function load() {

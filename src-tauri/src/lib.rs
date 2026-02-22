@@ -13,10 +13,10 @@ fn open_airdrop() -> Result<(), String> {
     Ok(())
 }
 
+use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, Emitter};
+
 #[tauri::command]
 async fn open_todo_window(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, Emitter};
-
     // If the window is already open, toggle its visibility
     if let Some(todo_window) = app.get_webview_window("todo") {
         if todo_window.is_visible().unwrap_or(false) {
@@ -60,38 +60,69 @@ async fn open_todo_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn setup_main_window(window: tauri::WebviewWindow) {
+    let app_handle = window.app_handle().clone();
+    let mw = window.clone();
+    window.on_window_event(move |event| {
+        match event {
+            tauri::WindowEvent::Moved(_) => {
+                if let Some(todo_window) = app_handle.get_webview_window("todo") {
+                    if todo_window.is_visible().unwrap_or(false) {
+                        if let Ok(outer_pos) = mw.outer_position() {
+                            if let Ok(factor) = mw.scale_factor() {
+                                let logical_pos = outer_pos.to_logical::<f64>(factor);
+                                let offset_x = logical_pos.x - 328.0;
+                                let offset_y = logical_pos.y;
+                                let _ = todo_window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(offset_x, offset_y)));
+                            }
+                        }
+                    }
+                }
+            }
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                let _ = mw.hide();
+                api.prevent_close();
+            }
+            _ => {}
+        }
+    });
+}
+
+fn show_or_create_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    } else {
+        if let Ok(window) = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+            .title("Netherite")
+            .inner_size(360.0, 260.0)
+            .min_inner_size(360.0, 160.0)
+            .decorations(false)
+            .always_on_top(true)
+            .transparent(true)
+            .skip_taskbar(true)
+            .build() 
+        {
+            setup_main_window(window.clone());
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             use tauri::menu::{Menu, MenuItem};
             use tauri::tray::TrayIconBuilder;
-            use tauri::Manager;
 
             // Always show and focus the main window on launch
             if let Some(main_window) = app.get_webview_window("main") {
+                setup_main_window(main_window.clone());
                 let _ = main_window.show();
                 let _ = main_window.set_focus();
             }
-
-                let app_handle = app.handle().clone();
-                let mw = main_window.clone();
-                main_window.on_window_event(move |event| {
-                    if let tauri::WindowEvent::Moved(_) = event {
-                        if let Some(todo_window) = app_handle.get_webview_window("todo") {
-                            if todo_window.is_visible().unwrap_or(false) {
-                                if let Ok(outer_pos) = mw.outer_position() {
-                                    if let Ok(factor) = mw.scale_factor() {
-                                        let logical_pos = outer_pos.to_logical::<f64>(factor);
-                                        let offset_x = logical_pos.x - 328.0;
-                                        let offset_y = logical_pos.y;
-                                        let _ = todo_window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(offset_x, offset_y)));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
 
             let show_i = MenuItem::with_id(app, "show", "Show Netherite", true, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "Quit Netherite", true, None::<&str>)?;
@@ -106,10 +137,7 @@ pub fn run() {
                             std::process::exit(0);
                         }
                         "show" => {
-                            if let Some(window) = app.get_webview_window("main") {
-                                let _ = window.show();
-                                let _ = window.set_focus();
-                            }
+                            show_or_create_main_window(app);
                         }
                         _ => {}
                     }
@@ -124,7 +152,6 @@ pub fn run() {
                 .unwrap()
                 .with_handler(|app, _shortcut, event| {
                     if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                        use tauri::Manager;
                         if let Some(window) = app.get_webview_window("main") {
                             if window.is_visible().unwrap_or(false) {
                                 let _ = window.hide();
@@ -132,6 +159,8 @@ pub fn run() {
                                 let _ = window.show();
                                 let _ = window.set_focus();
                             }
+                        } else {
+                            show_or_create_main_window(app);
                         }
                     }
                 })
