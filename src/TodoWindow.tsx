@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { emit } from "@tauri-apps/api/event";
 import { readTextFile, writeTextFile, exists, BaseDirectory } from "@tauri-apps/plugin-fs";
 import "./TodoWindow.css";
 
@@ -35,8 +36,10 @@ export default function TodoWindow() {
             if (e.metaKey && e.key.toLowerCase() === "w") {
                 e.preventDefault();
                 getCurrentWindow().hide();
+                emit("todo-state", false);
             } else if (e.key === "Escape") {
                 getCurrentWindow().hide();
+                emit("todo-state", false);
             }
         };
         window.addEventListener("keydown", handleKeyDown);
@@ -94,7 +97,7 @@ export default function TodoWindow() {
                     <div className="todo-dot" />
                     <span className="todo-name">to-do</span>
                 </div>
-                <button className="todo-close" onClick={() => getCurrentWindow().hide()}>
+                <button className="todo-close" onClick={() => { getCurrentWindow().hide(); emit("todo-state", false); }}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                         <path d="M18 6L6 18M6 6l12 12" />
                     </svg>

@@ -15,14 +15,18 @@ fn open_airdrop() -> Result<(), String> {
 
 #[tauri::command]
 async fn open_todo_window(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+    use tauri::{Manager, WebviewUrl, WebviewWindowBuilder, Emitter};
 
-    // If the window is already open, show and focus it
+    // If the window is already open, toggle its visibility
     if let Some(todo_window) = app.get_webview_window("todo") {
-        if !todo_window.is_visible().unwrap_or(false) {
+        if todo_window.is_visible().unwrap_or(false) {
+            let _ = todo_window.hide();
+            let _ = app.emit("todo-state", false);
+        } else {
             let _ = todo_window.show();
+            let _ = todo_window.set_focus();
+            let _ = app.emit("todo-state", true);
         }
-        let _ = todo_window.set_focus();
         return Ok(());
     }
 
@@ -51,6 +55,8 @@ async fn open_todo_window(app: tauri::AppHandle) -> Result<(), String> {
         .build()
         .map_err(|e| e.to_string())?;
 
+    let _ = app.emit("todo-state", true);
+
     Ok(())
 }
 
@@ -68,36 +74,24 @@ pub fn run() {
                 let _ = main_window.set_focus();
             }
 
-            // Sync todo window position with main window instantly via polling
-            let app_handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                let mut last_x = 0;
-                let mut last_y = 0;
-                
-                loop {
-                    if let Some(main_window) = app_handle.get_webview_window("main") {
+                let app_handle = app.handle().clone();
+                let mw = main_window.clone();
+                main_window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Moved(_) = event {
                         if let Some(todo_window) = app_handle.get_webview_window("todo") {
-                            // Only update if visible to save CPU
                             if todo_window.is_visible().unwrap_or(false) {
-                                if let Ok(outer_pos) = main_window.outer_position() {
-                                    if let Ok(factor) = main_window.scale_factor() {
+                                if let Ok(outer_pos) = mw.outer_position() {
+                                    if let Ok(factor) = mw.scale_factor() {
                                         let logical_pos = outer_pos.to_logical::<f64>(factor);
                                         let offset_x = logical_pos.x - 328.0;
-                                        
-                                        // Avoid redundant position updates if unchanged
-                                        if offset_x as i32 != last_x || logical_pos.y as i32 != last_y {
-                                            last_x = offset_x as i32;
-                                            last_y = logical_pos.y as i32;
-                                            let _ = todo_window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(offset_x, logical_pos.y)));
-                                        }
+                                        let offset_y = logical_pos.y;
+                                        let _ = todo_window.set_position(tauri::Position::Logical(tauri::LogicalPosition::new(offset_x, offset_y)));
                                     }
                                 }
                             }
                         }
                     }
-                    tokio::time::sleep(std::time::Duration::from_millis(16)).await;
-                }
-            });
+                });
 
             let show_i = MenuItem::with_id(app, "show", "Show Netherite", true, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "Quit Netherite", true, None::<&str>)?;

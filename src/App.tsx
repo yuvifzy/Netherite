@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { readTextFile, writeTextFile, exists, mkdir, BaseDirectory, remove, readDir, copyFile, readFile } from "@tauri-apps/plugin-fs";
 import { appLocalDataDir } from "@tauri-apps/api/path";
 import { open } from "@tauri-apps/plugin-shell";
@@ -346,46 +347,38 @@ function App() {
   };
 
   const toggleBtn = async (id: string) => {
-    setActiveBtns((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-
     if (id === "todo") {
       try {
         await invoke("open_todo_window");
       } catch (err) {
         console.error("Failed to spawn or focus todo window:", err);
       }
+      return;
     }
+
+    setActiveBtns((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   };
 
   useEffect(() => {
-    // Keep the "todo" button highlighted only if the window actually exists and is visible
-    let intv = setInterval(async () => {
-      try {
-        const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-        const todoWin = await WebviewWindow.getByLabel("todo");
-        if (todoWin) {
-          const visible = await todoWin.isVisible();
-          setActiveBtns((prev) => {
-            const next = new Set(prev);
-            if (visible) next.add("todo");
-            else next.delete("todo");
-            return next;
-          });
-        } else {
-          setActiveBtns((prev) => {
-            const next = new Set(prev);
-            next.delete("todo");
-            return next;
-          });
-        }
-      } catch (err) { }
-    }, 150);
+    let unlisten: () => void;
+    listen<boolean>("todo-state", (event) => {
+      setActiveBtns((prev) => {
+        const next = new Set(prev);
+        if (event.payload) next.add("todo");
+        else next.delete("todo");
+        return next;
+      });
+    }).then((f) => {
+      unlisten = f;
+    });
 
-    return () => clearInterval(intv);
+    return () => {
+      if (unlisten) unlisten();
+    };
   }, []);
 
   const preventDefault = (e: React.DragEvent) => e.preventDefault();
