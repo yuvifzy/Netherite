@@ -177,7 +177,7 @@ export default function HomePanel() {
     const closePanel = useCallback(() => {
         setIsClosing(true);
         emit("home-state", false);
-        setTimeout(() => invoke("hide_home_window"), 300);
+        setTimeout(() => invoke("close_home_window"), 300);
     }, []);
 
     // ── Keyboard ──────────────────────────────────────────────────────────

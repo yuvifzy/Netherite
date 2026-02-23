@@ -102,26 +102,19 @@ async fn open_todo_window(app: tauri::AppHandle, button_x: f64, button_y: f64) -
 }
 
 #[tauri::command]
-async fn hide_home_window(app: tauri::AppHandle) -> Result<(), String> {
+async fn close_home_window(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("home") {
-        let _ = win.set_ignore_cursor_events(true);
-        let _ = win.hide();
+        let _ = win.close();
     }
     Ok(())
 }
 
 #[tauri::command]
 async fn open_home_window(app: tauri::AppHandle) -> Result<(), String> {
+    // 1. Checks if a window with label "home" exists
+    // 2. If it does, calls window.close() to fully destroy it first
     if let Some(win) = app.get_webview_window("home") {
-        if win.is_visible().unwrap_or(false) {
-            let _ = app.emit("home-close-animated", ());
-        } else {
-            let _ = win.set_ignore_cursor_events(false);
-            let _ = win.show();
-            let _ = win.set_focus();
-            let _ = app.emit("home-state", true);
-        }
-        return Ok(());
+        let _ = win.close();
     }
 
     // Compute Spotlight-style position: centered horizontally, 20% from top
@@ -372,7 +365,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![get_note_files, open_todo_window, open_home_window, hide_home_window, spawn_note_window])
+        .invoke_handler(tauri::generate_handler![get_note_files, open_todo_window, open_home_window, close_home_window, spawn_note_window])
 
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
