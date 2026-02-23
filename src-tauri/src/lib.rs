@@ -359,9 +359,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             #[cfg(target_os = "macos")]
-            let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-
-            #[cfg(target_os = "macos")]
             {
                 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
                 if let (Ok(dock_new), Ok(dock_last), Ok(dock_home), Ok(dock_todo), Ok(dock_sep), Ok(dock_quit)) = (
@@ -373,6 +370,7 @@ pub fn run() {
                     MenuItem::with_id(app, "dock_quit", "Quit", true, None::<&str>),
                 ) {
                     if let Ok(dock_menu) = Menu::with_items(app, &[&dock_new, &dock_last, &dock_home, &dock_todo, &dock_sep, &dock_quit]) {
+                        #[cfg(target_os = "macos")]
                         let _ = app.set_menu(dock_menu);
                     }
                 }
