@@ -300,6 +300,60 @@ fn focus_all_notes_or_latest(app: tauri::AppHandle) {
     }
 }
 
+#[cfg(target_os = "macos")]
+pub trait MacOsDockMenuExt {
+    fn set_dock_menu(&self, menu: Option<tauri::menu::Menu<tauri::Wry>>) -> tauri::Result<()>;
+}
+
+#[cfg(target_os = "macos")]
+impl MacOsDockMenuExt for tauri::App {
+    #[allow(unexpected_cfgs)]
+    fn set_dock_menu(&self, menu: Option<tauri::menu::Menu<tauri::Wry>>) -> tauri::Result<()> {
+        if let Some(m) = menu {
+            unsafe {
+                #[allow(dead_code)]
+                struct TauriMenuBypass<R: tauri::Runtime> {
+                    id: muda::MenuId,
+                    inner: Option<muda::Menu>,
+                    app_handle: tauri::AppHandle<R>,
+                }
+                
+                let bypass: &std::sync::Arc<TauriMenuBypass<tauri::Wry>> = std::mem::transmute(&m);
+                if let Some(muda_m) = &bypass.inner {
+                    use muda::ContextMenu;
+                    let ns_menu = muda_m.ns_menu() as *mut std::ffi::c_void;
+                    use objc::{msg_send, sel, sel_impl};
+                    use objc::runtime::{Object, Sel, Class};
+                    
+                    let ns_app: *mut Object = msg_send![objc::class!(NSApplication), sharedApplication];
+                    let delegate: *mut Object = msg_send![ns_app, delegate];
+                    
+                    static mut DOCK_MENU: *mut std::ffi::c_void = std::ptr::null_mut();
+                    DOCK_MENU = ns_menu;
+                    
+                    extern "C" fn application_dock_menu(
+                        _self: &Object,
+                        _cmd: Sel,
+                        _sender: *mut Object,
+                    ) -> *mut std::ffi::c_void {
+                        unsafe { DOCK_MENU }
+                    }
+                    
+                    let delegate_class: *mut Class = msg_send![delegate, class];
+                    let imp: objc::runtime::Imp = std::mem::transmute(application_dock_menu as *const ());
+                    objc::runtime::class_addMethod(
+                        delegate_class,
+                        sel!(applicationDockMenu:),
+                        imp,
+                        std::ffi::CString::new("@@:@").unwrap().as_ptr()
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -360,20 +414,14 @@ pub fn run() {
         .setup(|app| {
             #[cfg(target_os = "macos")]
             {
-                use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
-                if let (Ok(dock_new), Ok(dock_last), Ok(dock_home), Ok(dock_todo), Ok(dock_sep), Ok(dock_quit)) = (
-                    MenuItem::with_id(app, "dock_new", "New Note", true, None::<&str>),
-                    MenuItem::with_id(app, "dock_last", "Last Note", true, None::<&str>),
-                    MenuItem::with_id(app, "dock_home", "Home", true, None::<&str>),
-                    MenuItem::with_id(app, "dock_todo", "To-do", true, None::<&str>),
-                    PredefinedMenuItem::separator(app),
-                    MenuItem::with_id(app, "dock_quit", "Quit", true, None::<&str>),
-                ) {
-                    if let Ok(dock_menu) = Menu::with_items(app, &[&dock_new, &dock_last, &dock_home, &dock_todo, &dock_sep, &dock_quit]) {
-                        #[cfg(target_os = "macos")]
-                        let _ = app.set_menu(dock_menu);
-                    }
-                }
+                use tauri::menu::{Menu, MenuItem};
+                let handle = app.handle();
+                let new_note = MenuItem::with_id(handle, "new_note", "New Note", true, None::<&str>)?;
+                let last_note = MenuItem::with_id(handle, "last_note", "Last Note", true, None::<&str>)?;
+                let home = MenuItem::with_id(handle, "home", "Home", true, None::<&str>)?;
+                let todo = MenuItem::with_id(handle, "todo", "To-do", true, None::<&str>)?;
+                let menu = Menu::with_items(handle, &[&new_note, &last_note, &home, &todo])?;
+                let _ = app.set_dock_menu(Some(menu));
             }
 
             use tauri::menu::{Menu, MenuItem};
@@ -402,37 +450,33 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            app.on_menu_event(move |app, event| {
-                match event.id.as_ref() {
-                    "dock_new" => {
-                        let app_c = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let _ = spawn_note_window(app_c).await;
-                        });
-                    }
-                    "dock_last" => {
-                        open_last_note(app.clone());
-                    }
-                    "dock_home" => {
-                        let app_c = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let _ = open_home_window(app_c).await;
-                        });
-                    }
-                    "dock_todo" => {
-                        let app_c = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let _ = open_todo_window(app_c, 0.0, 0.0).await;
-                        });
-                    }
-                    "dock_quit" => {
-                        std::process::exit(0);
-                    }
-                    _ => {}
-                }
-            });
-
             Ok(())
+        })
+        .on_menu_event(move |app, event| {
+            match event.id.as_ref() {
+                "new_note" => {
+                    let app_c = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = spawn_note_window(app_c).await;
+                    });
+                }
+                "last_note" => {
+                    open_last_note(app.clone());
+                }
+                "home" => {
+                    let app_c = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = open_home_window(app_c).await;
+                    });
+                }
+                "todo" => {
+                    let app_c = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = open_todo_window(app_c, 0.0, 0.0).await;
+                    });
+                }
+                _ => {}
+            }
         })
         .invoke_handler(tauri::generate_handler![get_note_files, open_todo_window, open_home_window, close_home_window, spawn_note_window])
 
