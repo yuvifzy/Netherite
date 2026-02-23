@@ -46,19 +46,18 @@ async fn open_todo_window(app: tauri::AppHandle, button_x: f64, button_y: f64) -
     let mut origin_x = 350.0;
     let mut origin_y = 20.0;
 
-    if let Some(main_window) = app.get_webview_window("main") {
-        if let Ok(outer_pos) = main_window.outer_position() {
-            if let Ok(factor) = main_window.scale_factor() {
-                let logical_pos = outer_pos.to_logical::<f64>(factor);
-                offset_x = logical_pos.x - 328.0;
-                offset_y = logical_pos.y;
-                if button_x > 0.0 && button_y > 0.0 {
-                    origin_x = button_x - offset_x;
-                    origin_y = button_y - offset_y;
-                }
-            }
+    let mut align_window = None;
+    for (label, window) in app.webview_windows() {
+        if label.starts_with("note_") && window.is_focused().unwrap_or(false) {
+            align_window = Some(window.clone());
+            break;
         }
     }
+    if align_window.is_none() {
+        align_window = app.webview_windows().into_iter().find(|(l, _)| l.starts_with("note_")).map(|(_, w)| w);
+    }
+
+    if let Some(main_window) = align_window {
 
     // If the window is already open, toggle its visibility
     if let Some(todo_window) = app.get_webview_window("todo") {
@@ -170,7 +169,18 @@ async fn spawn_note_window(app: tauri::AppHandle) -> Result<String, String> {
         step
     };
 
-    let (base_x, base_y) = if let Some(main) = app.get_webview_window("main") {
+    let mut align_window = None;
+    for (label, window) in app.webview_windows() {
+        if label.starts_with("note_") && window.is_focused().unwrap_or(false) {
+            align_window = Some(window.clone());
+            break;
+        }
+    }
+    if align_window.is_none() {
+        align_window = app.webview_windows().into_iter().find(|(l, _)| l.starts_with("note_")).map(|(_, w)| w);
+    }
+
+    let (base_x, base_y) = if let Some(main) = align_window {
         if let Ok(pos) = main.outer_position() {
             let factor = main.scale_factor().unwrap_or(1.0);
             let lp = pos.to_logical::<f64>(factor);
@@ -206,38 +216,60 @@ async fn spawn_note_window(app: tauri::AppHandle) -> Result<String, String> {
     Ok(filename)
 }
 
-fn setup_main_window(window: tauri::WebviewWindow) {
-    let mw = window.clone();
-    window.on_window_event(move |event| {
-        match event {
-            tauri::WindowEvent::CloseRequested { api, .. } => {
-                let _ = mw.hide();
-                api.prevent_close();
-            }
-            _ => {}
-        }
-    });
-}
-
-fn show_or_create_main_window(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.set_focus();
-    } else {
-        if let Ok(window) = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-            .title("Netherite")
-            .inner_size(360.0, 260.0)
-            .min_inner_size(360.0, 160.0)
-            .decorations(false)
-            .always_on_top(true)
-            .transparent(true)
-            .skip_taskbar(true)
-            .build() 
-        {
-            setup_main_window(window.clone());
+fn focus_all_notes_or_latest(app: tauri::AppHandle) {
+    let mut visible = false;
+    for (label, window) in app.webview_windows() {
+        if label.starts_with("note_") {
             let _ = window.show();
             let _ = window.set_focus();
+            visible = true;
         }
+    }
+    if !visible {
+        tauri::async_runtime::spawn(async move {
+            let mut latest_file: Option<String> = None;
+            if let Ok(base) = app.path().app_local_data_dir() {
+                let netherite = base.join("netherite");
+                if let Ok(entries) = std::fs::read_dir(&netherite) {
+                    let mut newest_time = 0;
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_file() {
+                            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                                if name.starts_with("note_") && name.ends_with(".txt") {
+                                    let mtime = path.metadata().ok()
+                                        .and_then(|m| m.modified().ok())
+                                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                                        .map(|d| d.as_millis() as u64)
+                                        .unwrap_or(0);
+                                    if mtime >= newest_time {
+                                        newest_time = mtime;
+                                        latest_file = Some(name.to_string());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some(filename) = latest_file {
+                let ts_part = filename.strip_prefix("note_").unwrap_or(&filename).strip_suffix(".txt").unwrap_or(&filename);
+                let label = format!("note_{}", ts_part);
+                let url = format!("/?window=note&file={}", filename);
+                let _ = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
+                    .title("note")
+                    .inner_size(360.0, 280.0)
+                    .min_inner_size(280.0, 160.0)
+                    .position(200.0, 200.0)
+                    .decorations(false)
+                    .always_on_top(true)
+                    .transparent(true)
+                    .skip_taskbar(true)
+                    .build();
+            } else {
+                let _ = spawn_note_window(app).await;
+            }
+        });
     }
 }
 
@@ -248,12 +280,8 @@ pub fn run() {
             use tauri::menu::{Menu, MenuItem};
             use tauri::tray::TrayIconBuilder;
 
-            // Always show and focus the main window on launch
-            if let Some(main_window) = app.get_webview_window("main") {
-                setup_main_window(main_window.clone());
-                let _ = main_window.show();
-                let _ = main_window.set_focus();
-            }
+            // Show all notes or latest note on launch
+            focus_all_notes_or_latest(app.handle().clone());
 
             let show_i = MenuItem::with_id(app, "show", "Show Netherite", true, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "Quit Netherite", true, None::<&str>)?;
@@ -268,7 +296,7 @@ pub fn run() {
                             std::process::exit(0);
                         }
                         "show" => {
-                            show_or_create_main_window(app);
+                            focus_all_notes_or_latest(app.clone());
                         }
                         _ => {}
                     }
@@ -283,15 +311,24 @@ pub fn run() {
                 .unwrap()
                 .with_handler(|app, _shortcut, event| {
                     if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                        if let Some(window) = app.get_webview_window("main") {
-                            if window.is_visible().unwrap_or(false) {
+                        let mut visible_count = 0;
+                        let mut all_notes = vec![];
+                        for (label, window) in app.webview_windows() {
+                            if label.starts_with("note_") {
+                                all_notes.push(window.clone());
+                                if window.is_visible().unwrap_or(false) {
+                                    visible_count += 1;
+                                }
+                            }
+                        }
+                        if visible_count > 0 {
+                            // Hide them all
+                            for window in all_notes {
                                 let _ = window.hide();
-                            } else {
-                                let _ = window.show();
-                                let _ = window.set_focus();
                             }
                         } else {
-                            show_or_create_main_window(app);
+                            // Show them or create one
+                            focus_all_notes_or_latest(app.clone());
                         }
                     }
                 })

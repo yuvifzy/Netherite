@@ -127,30 +127,43 @@ body,
     align-items: center;
 }
 
-.nw-close-btn {
+.nw-btn {
     width: 22px;
     height: 22px;
     border-radius: 6px;
     background: transparent;
     border: none;
-    color: rgba(235, 232, 228, 0.2);
+    color: rgba(235, 232, 228, 0.4);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: background 0.15s, color 0.15s;
     pointer-events: all;
+    position: relative;
 }
 
-.nw-close-btn:hover {
+.nw-btn:hover {
     background: rgba(255, 255, 255, 0.06);
-    color: rgba(235, 232, 228, 0.75);
+    color: rgba(235, 232, 228, 0.8);
 }
 
-.nw-close-btn svg {
-    width: 10px;
-    height: 10px;
-    stroke-width: 1.8;
+.nw-btn svg {
+    width: 11px;
+    height: 11px;
+    stroke-width: 1.6;
+}
+
+.nw-btn.active {
+    background: rgba(167, 139, 250, 0.15);
+    color: #a78bfa;
+}
+
+.nw-btn-divider {
+    width: 0.5px;
+    height: 12px;
+    background: rgba(255, 252, 248, 0.1);
+    margin: 0 4px;
 }
 
 /* ── EDITOR ── */

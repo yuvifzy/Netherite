@@ -11,22 +11,7 @@
   },
   "app": {
     "macOSPrivateApi": true,
-    "windows": [
-      {
-        "title": "Netherite",
-        "width": 360,
-        "height": 260,
-        "minWidth": 360,
-        "minHeight": 160,
-        "resizable": true,
-        "decorations": false,
-        "alwaysOnTop": true,
-        "transparent": true,
-        "skipTaskbar": true,
-        "visible": true,
-        "backgroundColor": "#00000000"
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }
