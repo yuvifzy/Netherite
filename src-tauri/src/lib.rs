@@ -291,7 +291,64 @@ fn focus_all_notes_or_latest(app: tauri::AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_shortcut("CmdOrCtrl+Shift+Space")
+                .unwrap()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        let mut visible_count = 0;
+                        let mut hidden_notes = vec![];
+                        for (label, window) in app.webview_windows() {
+                            if label.starts_with("note_") {
+                                if window.is_visible().unwrap_or(false) {
+                                    visible_count += 1;
+                                    let _ = window.hide();
+                                } else {
+                                    hidden_notes.push((label.clone(), window.clone()));
+                                }
+                            }
+                        }
+                        if visible_count == 0 {
+                            if hidden_notes.is_empty() {
+                                // No notes exist, create a fresh one
+                                let app2 = app.clone();
+                                tauri::async_runtime::spawn(async move {
+                                    let _ = spawn_note_window(app2).await;
+                                });
+                            } else {
+                                // Hidden notes exist, show highest timestamp
+                                hidden_notes.sort_by(|a, b| b.0.cmp(&a.0));
+                                if let Some((_, win)) = hidden_notes.first() {
+                                    let _ = win.show();
+                                    let _ = win.set_focus();
+                                }
+                            }
+                        }
+                    }
+                })
+                .build()
+        )
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_shortcut("CmdOrCtrl+N")
+                .unwrap()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
+                        let app2 = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = spawn_note_window(app2).await;
+                        });
+                    }
+                })
+                .build()
+        )
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
             use tauri::menu::{Menu, MenuItem};
             use tauri::tray::TrayIconBuilder;
 
@@ -320,51 +377,6 @@ pub fn run() {
 
             Ok(())
         })
-        .plugin(
-            tauri_plugin_global_shortcut::Builder::new()
-                .with_shortcut("CmdOrCtrl+Shift+Space")
-                .unwrap()
-                .with_handler(|app, _shortcut, event| {
-                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                        let mut visible_count = 0;
-                        let mut all_notes = vec![];
-                        for (label, window) in app.webview_windows() {
-                            if label.starts_with("note_") {
-                                all_notes.push(window.clone());
-                                if window.is_visible().unwrap_or(false) {
-                                    visible_count += 1;
-                                }
-                            }
-                        }
-                        if visible_count > 0 {
-                            // Hide them all
-                            for window in all_notes {
-                                let _ = window.hide();
-                            }
-                        } else {
-                            // Show them or create one
-                            focus_all_notes_or_latest(app.clone());
-                        }
-                    }
-                })
-                .build()
-        )
-        .plugin(
-            tauri_plugin_global_shortcut::Builder::new()
-                .with_shortcut("CmdOrCtrl+N")
-                .unwrap()
-                .with_handler(|app, _shortcut, event| {
-                    if event.state() == tauri_plugin_global_shortcut::ShortcutState::Pressed {
-                        let app2 = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let _ = spawn_note_window(app2).await;
-                        });
-                    }
-                })
-                .build()
-        )
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![get_note_files, open_todo_window, open_home_window, close_home_window, spawn_note_window])
 
         .build(tauri::generate_context!())
