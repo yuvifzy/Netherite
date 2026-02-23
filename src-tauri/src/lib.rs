@@ -58,6 +58,18 @@ async fn open_todo_window(app: tauri::AppHandle, button_x: f64, button_y: f64) -
     }
 
     if let Some(main_window) = align_window {
+        if let Ok(outer_pos) = main_window.outer_position() {
+            if let Ok(factor) = main_window.scale_factor() {
+                let logical_pos = outer_pos.to_logical::<f64>(factor);
+                offset_x = logical_pos.x - 328.0;
+                offset_y = logical_pos.y;
+                if button_x > 0.0 && button_y > 0.0 {
+                    origin_x = button_x - offset_x;
+                    origin_y = button_y - offset_y;
+                }
+            }
+        }
+    }
 
     // If the window is already open, toggle its visibility
     if let Some(todo_window) = app.get_webview_window("todo") {
