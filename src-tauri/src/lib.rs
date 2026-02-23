@@ -231,6 +231,61 @@ async fn spawn_note_window(app: tauri::AppHandle) -> Result<String, String> {
     Ok(filename)
 }
 
+
+fn open_last_note(app: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        let mut latest_file: Option<String> = None;
+        if let Ok(base) = app.path().app_local_data_dir() {
+            let netherite = base.join("netherite");
+            if let Ok(entries) = std::fs::read_dir(&netherite) {
+                let mut newest_time = 0;
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() {
+                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                            if name.starts_with("note_") && name.ends_with(".txt") {
+                                let mtime = path.metadata().ok()
+                                    .and_then(|m| m.modified().ok())
+                                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                                    .map(|d| d.as_millis() as u64)
+                                    .unwrap_or(0);
+                                if mtime >= newest_time {
+                                    newest_time = mtime;
+                                    latest_file = Some(name.to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(filename) = latest_file {
+            let ts_part = filename.strip_prefix("note_").unwrap_or(&filename).strip_suffix(".txt").unwrap_or(&filename);
+            let label = format!("note_{}", ts_part);
+            
+            if let Some(win) = app.get_webview_window(&label) {
+                let _ = win.show();
+                let _ = win.set_focus();
+                return;
+            }
+
+            let url = format!("/?window=note&file={}", filename);
+            let _ = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
+                .title("note")
+                .inner_size(360.0, 280.0)
+                .min_inner_size(280.0, 160.0)
+                .position(200.0, 200.0)
+                .decorations(false)
+                .always_on_top(true)
+                .transparent(true)
+                .skip_taskbar(true)
+                .build();
+        } else {
+            let _ = spawn_note_window(app).await;
+        }
+    });
+}
+
 fn focus_all_notes_or_latest(app: tauri::AppHandle) {
     let mut visible = false;
     for (label, window) in app.webview_windows() {
@@ -241,50 +296,7 @@ fn focus_all_notes_or_latest(app: tauri::AppHandle) {
         }
     }
     if !visible {
-        tauri::async_runtime::spawn(async move {
-            let mut latest_file: Option<String> = None;
-            if let Ok(base) = app.path().app_local_data_dir() {
-                let netherite = base.join("netherite");
-                if let Ok(entries) = std::fs::read_dir(&netherite) {
-                    let mut newest_time = 0;
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if path.is_file() {
-                            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                                if name.starts_with("note_") && name.ends_with(".txt") {
-                                    let mtime = path.metadata().ok()
-                                        .and_then(|m| m.modified().ok())
-                                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                                        .map(|d| d.as_millis() as u64)
-                                        .unwrap_or(0);
-                                    if mtime >= newest_time {
-                                        newest_time = mtime;
-                                        latest_file = Some(name.to_string());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            if let Some(filename) = latest_file {
-                let ts_part = filename.strip_prefix("note_").unwrap_or(&filename).strip_suffix(".txt").unwrap_or(&filename);
-                let label = format!("note_{}", ts_part);
-                let url = format!("/?window=note&file={}", filename);
-                let _ = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
-                    .title("note")
-                    .inner_size(360.0, 280.0)
-                    .min_inner_size(280.0, 160.0)
-                    .position(200.0, 200.0)
-                    .decorations(false)
-                    .always_on_top(true)
-                    .transparent(true)
-                    .skip_taskbar(true)
-                    .build();
-            } else {
-                let _ = spawn_note_window(app).await;
-            }
-        });
+        open_last_note(app);
     }
 }
 
@@ -349,6 +361,23 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             let _ = app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
+            #[cfg(target_os = "macos")]
+            {
+                use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+                if let (Ok(dock_new), Ok(dock_last), Ok(dock_home), Ok(dock_todo), Ok(dock_sep), Ok(dock_quit)) = (
+                    MenuItem::with_id(app, "dock_new", "New Note", true, None::<&str>),
+                    MenuItem::with_id(app, "dock_last", "Last Note", true, None::<&str>),
+                    MenuItem::with_id(app, "dock_home", "Home", true, None::<&str>),
+                    MenuItem::with_id(app, "dock_todo", "To-do", true, None::<&str>),
+                    PredefinedMenuItem::separator(app),
+                    MenuItem::with_id(app, "dock_quit", "Quit", true, None::<&str>),
+                ) {
+                    if let Ok(dock_menu) = Menu::with_items(app, &[&dock_new, &dock_last, &dock_home, &dock_todo, &dock_sep, &dock_quit]) {
+                        let _ = app.set_menu(dock_menu);
+                    }
+                }
+            }
+
             use tauri::menu::{Menu, MenuItem};
             use tauri::tray::TrayIconBuilder;
 
@@ -374,6 +403,36 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
+            app.on_menu_event(move |app, event| {
+                match event.id.as_ref() {
+                    "dock_new" => {
+                        let app_c = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = spawn_note_window(app_c).await;
+                        });
+                    }
+                    "dock_last" => {
+                        open_last_note(app.clone());
+                    }
+                    "dock_home" => {
+                        let app_c = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = open_home_window(app_c).await;
+                        });
+                    }
+                    "dock_todo" => {
+                        let app_c = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = open_todo_window(app_c, 0.0, 0.0).await;
+                        });
+                    }
+                    "dock_quit" => {
+                        std::process::exit(0);
+                    }
+                    _ => {}
+                }
+            });
 
             Ok(())
         })
