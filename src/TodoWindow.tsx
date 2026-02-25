@@ -27,9 +27,8 @@ export default function TodoWindow() {
     const closeWindow = () => {
         setIsClosing(true);
         setTimeout(() => {
-            getCurrentWindow().hide();
             emit("todo-state", false);
-            setIsClosing(false);
+            getCurrentWindow().close();
         }, 260);
     };
 
@@ -39,7 +38,6 @@ export default function TodoWindow() {
                 setOx(event.payload[0].toString());
                 setOy(event.payload[1].toString());
             }
-            setIsClosing(false);
             setAnimKey(prev => prev + 1);
         });
         return () => { unlisten.then(f => f()); }
