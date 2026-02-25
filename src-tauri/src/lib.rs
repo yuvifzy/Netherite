@@ -75,11 +75,6 @@ async fn open_todo_window(app: tauri::AppHandle, button_x: f64, button_y: f64) -
     if let Some(todo_window) = app.get_webview_window("todo") {
         if todo_window.is_visible().unwrap_or(false) {
             let _ = app.emit("todo-close-animated", ());
-        } else {
-            let _ = app.emit("todo-refresh-origin", (origin_x, origin_y));
-            let _ = todo_window.show();
-            let _ = todo_window.set_focus();
-            let _ = app.emit("todo-state", true);
         }
         return Ok(());
     }
