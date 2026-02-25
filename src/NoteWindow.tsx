@@ -174,9 +174,6 @@ export default function NoteWindow() {
                 <div
                     className="nw-handle"
                     data-tauri-drag-region
-                    onMouseDown={async () => {
-                        await getCurrentWindow().startDragging();
-                    }}
                 >
                     <div className="nw-handle-left">
                         <div className="nw-dot" />
